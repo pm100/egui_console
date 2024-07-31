@@ -7,6 +7,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-eframe = {path="c:/work/forks/egui/crates/eframe"}
-egui = {path="c:/work/forks/egui/crates/egui", features=["persistence"]}
+eframe = "0.28.1"
+egui = "0.28.1"
+#eframe = {path="c:/work/forks/egui/crates/eframe"}
+#egui = { path = "../forks/egui/crates/egui", features = ["persistence"] }
 serde = "1.0.204"
+serde_derive = "1.0.204"
+[features]
+persistence=[]

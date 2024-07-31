@@ -41,12 +41,6 @@ pub fn syntax() -> Command {
         )
         .subcommand(Command::new("light").help_template(APPLET_TEMPLATE))
         .subcommand(
-            Command::new("about")
-                .about("explanation of commands")
-                .arg(arg!([topic]))
-                .help_template(APPLET_TEMPLATE),
-        )
-        .subcommand(
             Command::new("cd")
                 .about("change current dir")
                 .arg(Arg::new("directory").required(true))

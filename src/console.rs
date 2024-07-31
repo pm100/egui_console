@@ -3,7 +3,6 @@ use std::{collections::VecDeque, str::Lines, sync::atomic::AtomicU16};
 use egui::{
     text::CCursorRange, Align, Context, Event, EventFilter, Id, Key, Modifiers, TextEdit, Ui,
 };
-use serde::{Deserialize, Serialize};
 static SEARCH_PROMPT: &str = "(reverse-i-search) :";
 const SEARCH_PROMPT_SLOT_OFF: usize = 18;
 static INSTANCE_COUNT: AtomicU16 = AtomicU16::new(0);
@@ -12,25 +11,26 @@ pub enum ConsoleEvent {
     CtrlC,
     None,
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
+#[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConsoleWindow {
-    #[serde(skip)]
+    #[cfg_attr(feature = "persistence", serde(skip))]
     text: String,
-    #[serde(skip)]
+    #[cfg_attr(feature = "persistence", serde(skip))]
     new_line: bool,
     history_size: usize,
     scrollback_size: usize,
     command_history: VecDeque<String>,
-    #[serde(skip)]
+    #[cfg_attr(feature = "persistence", serde(skip))]
     history_cursor: Option<usize>,
     prompt: String,
     prompt_len: usize,
     id: Id,
     save_prompt: String,
-    #[serde(skip)]
+    #[cfg_attr(feature = "persistence", serde(skip))]
     search_partial: Option<String>,
     // enable running stuff after serde reload
-    #[serde(skip)]
+    #[cfg_attr(feature = "persistence", serde(skip))]
     init_done: bool,
 }
 
@@ -41,11 +41,10 @@ impl ConsoleWindow {
             new_line: false,
             command_history: VecDeque::new(),
             history_cursor: None,
-            history_size: 5,
+            history_size: 100,
             scrollback_size: 1000,
             prompt: prompt.to_string(),
             prompt_len: prompt.chars().count(),
-
             id: Id::new(format!(
                 "console_text_{}",
                 INSTANCE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
