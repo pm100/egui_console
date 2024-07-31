@@ -1,6 +1,9 @@
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 use egui_console::console::{ConsoleEvent, ConsoleWindow};
 
+use crate::clap::syntax;
+use anyhow::Result;
+
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
@@ -9,7 +12,7 @@ pub struct TemplateApp {
 
     #[serde(skip)] // This how you opt-out of serialization of a field
     value: f32,
-    #[serde(skip)] // This how you opt-out of serialization of a field
+    //  #[serde(skip)] // This how you opt-out of serialization of a field
     console: ConsoleWindow,
 }
 
@@ -66,7 +69,7 @@ impl eframe::App for TemplateApp {
                     ui.add_space(16.0);
                 }
 
-                egui::widgets::global_dark_light_mode_buttons(ui);
+                //  egui::widgets::global_dark_light_mode_buttons(ui);
             });
         });
 
@@ -84,7 +87,26 @@ impl eframe::App for TemplateApp {
                     console_response = self.console.draw(ui);
                 });
             if let ConsoleEvent::Command(command) = console_response {
-                self.console.sync_response(&command);
+                let resp = match self.dispatch(&command, ctx) {
+                    Err(e) => {
+                        if let Some(original_error) = e.downcast_ref::<clap::error::Error>() {
+                            format!("{}", original_error)
+                        } else if e.backtrace().status()
+                            == std::backtrace::BacktraceStatus::Captured
+                        {
+                            format!("{} {}", e, e.backtrace())
+                        } else {
+                            format!("{}", e)
+                        }
+                    }
+
+                    Ok(string) => string, // continue
+                };
+                self.console.sync_response(&resp);
+            }
+
+            if ui.button("click").clicked() {
+                self.console.async_message("clicked");
             }
             // let console_response =
             // // The central panel the region left after adding TopPanel's and SidePanel's
@@ -114,17 +136,53 @@ impl eframe::App for TemplateApp {
         });
     }
 }
+impl TemplateApp {
+    pub fn dispatch(&mut self, line: &str, ctx: &egui::Context) -> Result<String> {
+        let args = line.split_whitespace();
+        // parse with clap
+        let matches = syntax().try_get_matches_from(args)?;
+        // execute the command
+        match matches.subcommand() {
+            Some(("cd", args)) => {
+                let dir = args.get_one::<String>("directory").unwrap();
+                std::env::set_current_dir(dir)?;
+                let cwd = std::env::current_dir()?;
+                Ok(format!("Current working directory: {}", cwd.display()))
+            }
+            Some(("dark", _)) => {
+                //  let ctx = egui::Context::default();
+                ctx.set_visuals(egui::Visuals::dark());
+                Ok("Dark mode enabled".to_string())
+            }
+            Some(("light", _)) => {
+                //   let ctx = egui::Context::default();
+                ctx.set_visuals(egui::Visuals::light());
+                Ok("Light mode enabled".to_string())
+            }
+            Some(("quit", _)) => {
+                //   let ctx = egui::Context::default();
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                Ok("Bye".to_string())
+            }
+            Some(("dir", args)) => {
+                let filter = if let Some(filter) = args.get_one::<String>("filter") {
+                    filter.clone()
+                } else {
+                    "".to_string()
+                };
+                let entries = std::fs::read_dir(".")?;
+                let mut result = String::new();
+                for entry in entries {
+                    let entry = entry?;
+                    let path = entry.path();
+                    if path.display().to_string().contains(filter.as_str()) {
+                        result.push_str(&format!("{}\n", path.display()));
+                    }
+                }
+                Ok(result)
+            }
 
-fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.label("Powered by ");
-        ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-        ui.label(" and ");
-        ui.hyperlink_to(
-            "eframe",
-            "https://github.com/emilk/egui/tree/master/crates/eframe",
-        );
-        ui.label(".");
-    });
+            _ => Ok("huh?".to_string()),
+        }
+    }
 }

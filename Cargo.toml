@@ -8,4 +8,5 @@ edition = "2021"
 
 [dependencies]
 eframe = {path="c:/work/forks/egui/crates/eframe"}
-egui = {path="c:/work/forks/egui/crates/egui"}
+egui = {path="c:/work/forks/egui/crates/egui", features=["persistence"]}
+serde = "1.0.204"

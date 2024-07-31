@@ -1,34 +1,43 @@
-use std::{cmp::Reverse, collections::VecDeque, str::Lines};
+use std::{collections::VecDeque, str::Lines, sync::atomic::AtomicU16};
 
 use egui::{
     text::CCursorRange, Align, Context, Event, EventFilter, Id, Key, Modifiers, TextEdit, Ui,
 };
+use serde::{Deserialize, Serialize};
 static SEARCH_PROMPT: &str = "(reverse-i-search) :";
 const SEARCH_PROMPT_SLOT_OFF: usize = 18;
-
+static INSTANCE_COUNT: AtomicU16 = AtomicU16::new(0);
 pub enum ConsoleEvent {
     Command(String),
     CtrlC,
     None,
 }
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ConsoleWindow {
+    #[serde(skip)]
     text: String,
+    #[serde(skip)]
     new_line: bool,
     history_size: usize,
     scrollback_size: usize,
     command_history: VecDeque<String>,
+    #[serde(skip)]
     history_cursor: Option<usize>,
     prompt: String,
     prompt_len: usize,
     id: Id,
     save_prompt: String,
+    #[serde(skip)]
     search_partial: Option<String>,
+    // enable running stuff after serde reload
+    #[serde(skip)]
+    init_done: bool,
 }
 
 impl ConsoleWindow {
     pub fn new(prompt: &str) -> Self {
         Self {
-            text: prompt.to_string(),
+            text: String::new(),
             new_line: false,
             command_history: VecDeque::new(),
             history_cursor: None,
@@ -37,12 +46,21 @@ impl ConsoleWindow {
             prompt: prompt.to_string(),
             prompt_len: prompt.chars().count(),
 
-            id: Id::new("console_text"),
+            id: Id::new(format!(
+                "console_text_{}",
+                INSTANCE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            )),
             save_prompt: prompt.to_string(),
             search_partial: None,
+            init_done: false,
         }
     }
+
     pub fn draw(&mut self, ui: &mut Ui) -> ConsoleEvent {
+        if !self.init_done {
+            self.init_done = true;
+            self.draw_prompt();
+        }
         // do we need to handle keyboard events?
         let msg = if ui.ctx().memory(|mem| mem.has_focus(self.id)) {
             self.handle_kb(ui.ctx())
@@ -55,20 +73,16 @@ impl ConsoleWindow {
 
             // did somebody type?
             if self.text.len() != text_len {
+                // yes - need to update partial search?
                 if self.search_partial.is_some() {
                     self.search_partial = Some(self.get_search_text().to_string());
-                    println!("update searching for {:?}", self.search_partial);
                     self.prompt = SEARCH_PROMPT.to_string();
                     self.prompt.insert_str(
                         SEARCH_PROMPT_SLOT_OFF + 1,
-                        &self.search_partial.as_ref().unwrap(),
+                        self.search_partial.as_ref().unwrap(),
                     );
-                    println!("prompt is now {}", self.prompt);
-                    if self.search_partial.as_ref().unwrap().is_empty() {
-                        self.history_cursor = None;
-                    } //else {
+                    self.history_cursor = None;
                     self.history_back();
-                    // }
                 }
             }
         }
@@ -90,11 +104,13 @@ impl ConsoleWindow {
 
     pub fn sync_response(&mut self, data: &str) {
         self.text.push_str(&format!("\n{}\n{}", data, self.prompt));
+        self.truncate_scroll_back();
         self.new_line = true;
     }
 
     pub fn async_message(&mut self, data: &str) {
         self.text.push_str(&format!("\n{}\n{}", data, self.prompt));
+        self.truncate_scroll_back();
         self.new_line = true;
     }
 
@@ -121,6 +137,7 @@ impl ConsoleWindow {
             ui.add_sized(ui.available_size(), |ui: &mut Ui| {
                 let widget = egui::TextEdit::multiline(&mut self.text)
                     .font(egui::TextStyle::Monospace)
+                    .frame(false)
                     .code_editor()
                     .lock_focus(true)
                     .desired_width(0.0f32)
@@ -144,8 +161,7 @@ impl ConsoleWindow {
                             } else {
                                 let search_text = self.get_search_text();
                                 if cursor.primary.index
-                                    > ((last_off + SEARCH_PROMPT.len() + search_text.len())
-                                        as usize)
+                                    > (last_off + SEARCH_PROMPT.len() + search_text.len())
                                 {
                                     new_cursor = Some(self.cursor_at(
                                         last_off + SEARCH_PROMPT_SLOT_OFF + search_text.len() + 1,
@@ -192,7 +208,21 @@ impl ConsoleWindow {
             .strip_prefix(&self.prompt)
             .unwrap_or("")
     }
+    fn truncate_scroll_back(&mut self) {
+        let line_count = self.text.lines().count();
+        if line_count < self.scrollback_size {
+            return;
+        }
+        let mut scrollback = String::with_capacity(self.text.len());
 
+        for (i, line) in self.text.lines().enumerate() {
+            if i > line_count - self.scrollback_size {
+                scrollback.push_str(line);
+                scrollback.push('\n');
+            }
+        }
+        self.text = scrollback;
+    }
     fn get_search_text(&self) -> &str {
         let last = self.text.lines().last().unwrap_or("");
         let mut iter = last.char_indices();
@@ -223,7 +253,6 @@ impl ConsoleWindow {
                 if self.search_partial.is_some() {
                     self.exit_search_mode()
                 };
-                println!("history_fwd hc = {:?}", self.history_cursor);
                 if let Some(mut hc) = self.history_cursor {
                     let last = self.get_last_line();
                     self.text = self.text.strip_suffix(last).unwrap_or("").to_string();
@@ -262,6 +291,7 @@ impl ConsoleWindow {
 
                 self.new_line = true;
                 self.history_cursor = None;
+                self.truncate_scroll_back();
                 (true, Some(last))
             }
 
@@ -293,7 +323,6 @@ impl ConsoleWindow {
                 // in either mode dont allow motion (or deleting) into prompt
 
                 let last_off = self.last_line_offset();
-                println!("back");
                 match self.search_partial {
                     Some(_) => {
                         if cursor < (last_off + SEARCH_PROMPT_SLOT_OFF + 2) {
@@ -343,7 +372,6 @@ impl ConsoleWindow {
     }
 
     fn history_back(&mut self) {
-        println!("history_back hc = {:?}", self.history_cursor);
         let hc = match self.history_cursor {
             Some(hc) => hc,
             None => self.command_history.len(),
@@ -357,7 +385,7 @@ impl ConsoleWindow {
                         self.history_cursor = None;
                         break;
                     }
-                    println!("searching for {} {}", search, &self.command_history[i]);
+
                     if self.command_history[i].contains(search) {
                         hist_line = self.command_history[i].clone();
                         self.history_cursor = Some(i);
@@ -371,11 +399,10 @@ impl ConsoleWindow {
                 }
             }
         }
-        let last = self.get_last_line();
-        println!("history_back found {:?} last='{}'", hist_line, last);
 
-        self.text = self.text.strip_suffix(last).unwrap_or("").to_string();
         if !hist_line.is_empty() {
+            let last = self.get_last_line();
+            self.text = self.text.strip_suffix(last).unwrap_or("").to_string();
             self.text.push_str(&hist_line);
         }
     }
@@ -387,7 +414,6 @@ impl ConsoleWindow {
     fn enter_search_mode(&mut self) {
         self.prompt = SEARCH_PROMPT.to_string();
         self.search_partial = Some(String::new());
-        println!("prompt is now {}", self.prompt);
         let last_off = self.last_line_offset();
         self.text.truncate(last_off);
         self.draw_prompt();
@@ -402,7 +428,7 @@ impl ConsoleWindow {
         self.new_line = true;
     }
     fn draw_prompt(&mut self) {
-        if self.text.len() > 0 && !self.text.ends_with('\n') {
+        if !self.text.is_empty() && !self.text.ends_with('\n') {
             self.text.push('\n');
         }
         self.text.push_str(&self.prompt);
