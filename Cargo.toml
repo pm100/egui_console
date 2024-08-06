@@ -16,7 +16,7 @@ categories=["gui"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ctrlc = "3.4.4"
+
 eframe = "0.28.1"
 egui = "0.28.1"
 

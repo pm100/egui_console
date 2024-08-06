@@ -13,8 +13,7 @@ static INSTANCE_COUNT: AtomicU16 = AtomicU16::new(0);
 pub enum ConsoleEvent {
     /// A command was entered
     Command(String),
-    /// The user pressed ctrl-c
-    CtrlC,
+
     /// Nothing
     None,
 }
