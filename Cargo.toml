@@ -5,7 +5,8 @@ version = "0.1.0"
 edition = "2021"
 exclude = [
     ".vscode"
-]license = "MIT"
+]
+license = "MIT"
 description = "A Console Window for egui"
 repository = "https://github.vom/pm100/egui_console"
 readme = "README.md"
