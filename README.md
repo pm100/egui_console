@@ -7,7 +7,7 @@ Provides a console window for egui. This is not a shell to the OS its simply a c
 
 ## demo
 
-Run it with `cargo run -p demo`. Type 'help' at the command prompt
+Run it with `cargo run -p demo`. Type 'help' at the command prompt. Shows integration with https://docs.rs/clap/latest/clap/ 
 
 ![image](https://github.com/user-attachments/assets/de2df396-68ac-4723-ae62-2811fb81ba05)
 
