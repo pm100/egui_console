@@ -2,4 +2,4 @@
 
 mod app;
 pub mod clap;
-pub use app::TemplateApp;
+pub use app::ConsoleDemo;

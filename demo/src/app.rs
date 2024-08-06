@@ -1,12 +1,12 @@
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
-use egui_console::console::{ConsoleEvent, ConsoleWindow};
+use egui_console::console::{ConsoleBuilder, ConsoleEvent, ConsoleWindow};
 
 use crate::clap::syntax;
 use anyhow::Result;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct TemplateApp {
+pub struct ConsoleDemo {
     // Example stuff:
     label: String,
 
@@ -16,18 +16,18 @@ pub struct TemplateApp {
     console: ConsoleWindow,
 }
 
-impl Default for TemplateApp {
+impl Default for ConsoleDemo {
     fn default() -> Self {
         Self {
             // Example stuff:
             label: "Hello World!".to_owned(),
             value: 2.7,
-            console: ConsoleWindow::new(">> "),
+            console: ConsoleBuilder::new().prompt(">> ").history_size(20).build(),
         }
     }
 }
 
-impl TemplateApp {
+impl ConsoleDemo {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
@@ -43,7 +43,7 @@ impl TemplateApp {
     }
 }
 
-impl eframe::App for TemplateApp {
+impl eframe::App for ConsoleDemo {
     /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
@@ -59,7 +59,7 @@ impl eframe::App for TemplateApp {
 
             egui::menu::bar(ui, |ui| {
                 // NOTE: no File->Quit on web pages!
-                let is_web = cfg!(target_arch = "wasm32");
+                let is_web = cfg!(target_arch = "wasm32") | true;
                 if !is_web {
                     ui.menu_button("File", |ui| {
                         if ui.button("Quit").clicked() {
@@ -69,7 +69,7 @@ impl eframe::App for TemplateApp {
                     ui.add_space(16.0);
                 }
 
-                //  egui::widgets::global_dark_light_mode_buttons(ui);
+                egui::widgets::global_dark_light_mode_buttons(ui);
             });
         });
 
@@ -77,12 +77,10 @@ impl eframe::App for TemplateApp {
             let mut console_window_open = true;
             let mut console_response: ConsoleEvent = ConsoleEvent::None;
             egui::Window::new("Console Window")
-                //.id(Id::new(self.name()))
                 .open(&mut console_window_open)
-                .vscroll(false)
+                // .vscroll(false)
                 .default_height(500.0)
                 .resizable(true)
-                //  .auto_sized()
                 .show(ctx, |ui| {
                     console_response = self.console.draw(ui);
                 });
@@ -102,11 +100,15 @@ impl eframe::App for TemplateApp {
 
                     Ok(string) => string, // continue
                 };
-                self.console.sync_response(&resp);
+                if !resp.is_empty() {
+                    self.console.write(&resp);
+                }
+                self.console.prompt();
             }
 
             if ui.button("click").clicked() {
-                self.console.async_message("clicked");
+                self.console.write("clicked");
+                self.console.prompt();
             }
             // let console_response =
             // // The central panel the region left after adding TopPanel's and SidePanel's
@@ -136,7 +138,7 @@ impl eframe::App for TemplateApp {
         });
     }
 }
-impl TemplateApp {
+impl ConsoleDemo {
     pub fn dispatch(&mut self, line: &str, ctx: &egui::Context) -> Result<String> {
         let args = line.split_whitespace();
         // parse with clap
@@ -164,6 +166,10 @@ impl TemplateApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 Ok("Bye".to_string())
             }
+            Some(("clear_screen", _)) => {
+                self.console.clear();
+                Ok("".to_string())
+            }
             Some(("dir", args)) => {
                 let filter = if let Some(filter) = args.get_one::<String>("filter") {
                     filter.clone()
@@ -181,8 +187,19 @@ impl TemplateApp {
                 }
                 Ok(result)
             }
-
-            _ => Ok("huh?".to_string()),
+            Some(("history", _)) => {
+                let history = self.console.get_history();
+                let mut result = String::new();
+                for (i, line) in history.iter().enumerate() {
+                    result.push_str(&format!("{}: {}\n", i, line));
+                }
+                Ok(result)
+            }
+            Some(("clear_history", _)) => {
+                self.console.clear_history();
+                Ok("".to_string())
+            }
+            _ => Ok("Unknown command".to_string()),
         }
     }
 }

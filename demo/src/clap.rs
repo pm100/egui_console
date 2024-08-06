@@ -41,6 +41,22 @@ pub fn syntax() -> Command {
         )
         .subcommand(Command::new("light").help_template(APPLET_TEMPLATE))
         .subcommand(
+            Command::new("clear_screen")
+                .visible_aliases(["cls"])
+                .about("Clear the screen")
+                .help_template(APPLET_TEMPLATE),
+        )
+        .subcommand(
+            Command::new("history")
+                .about("dump command history")
+                .help_template(APPLET_TEMPLATE),
+        )
+        .subcommand(
+            Command::new("clear_history")
+                .help_template(APPLET_TEMPLATE)
+                .visible_aliases(["clh"]),
+        )
+        .subcommand(
             Command::new("cd")
                 .about("change current dir")
                 .arg(Arg::new("directory").required(true))

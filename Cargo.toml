@@ -9,9 +9,12 @@ edition = "2021"
 [dependencies]
 eframe = "0.28.1"
 egui = "0.28.1"
-#eframe = {path="c:/work/forks/egui/crates/eframe"}
-#egui = { path = "../forks/egui/crates/egui", features = ["persistence"] }
+
 serde = "1.0.204"
 serde_derive = "1.0.204"
+
 [features]
 persistence=[]
+
+
+
