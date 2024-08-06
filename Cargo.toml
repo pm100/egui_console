@@ -3,10 +3,19 @@ workspace = { members = ["demo"] }
 name = "egui_console"
 version = "0.1.0"
 edition = "2021"
+exclude = [
+    ".vscode"
+]license = "MIT"
+description = "A Console Window for egui"
+repository = "https://github.vom/pm100/egui_console"
+readme = "README.md"
+keywords=["egui","widget","console"]
+categories=["gui"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+ctrlc = "3.4.4"
 eframe = "0.28.1"
 egui = "0.28.1"
 
@@ -15,6 +24,8 @@ serde_derive = "1.0.204"
 
 [features]
 persistence=[]
+
+
 
 
 
