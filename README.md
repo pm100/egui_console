@@ -13,9 +13,13 @@ Run it with `cargo run -p demo`. Type 'help' at the command prompt. Shows integr
 
 ## use
 
-- create a ConsoleBuilder, at least specify a prompt
-- call create to obtain an instance of ConsoleWindow. This needs to be persisteed between frames.
-- In each update call ConsoleWindow::draw
-- If the user entered a command then this call returns what they entered, otherwise None
-- output to console with ConsoleWindow::write
-- reprompt with ConsoleWindow::prompt
+You need a ConsoleWindow instance in your egui App 
+```
+pub struct ConsoleDemo {
+    // Example stuff:
+    label: String,
+    #[serde(skip)] // This how you opt-out of serialization of a field
+    value: f32,
+    console: ConsoleWindow,
+}
+```

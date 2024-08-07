@@ -1,18 +1,16 @@
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
-use egui_console::console::{ConsoleBuilder, ConsoleEvent, ConsoleWindow};
-
 use crate::clap::syntax;
 use anyhow::Result;
+/// We derive Deserialize/Serialize so we can persist app state on shutdown.
+//use egui_console::console::{ConsoleBuilder, ConsoleEvent, ConsoleWindow};
+use egui_console::{ConsoleBuilder, ConsoleEvent, ConsoleWindow};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct ConsoleDemo {
     // Example stuff:
     label: String,
-
     #[serde(skip)] // This how you opt-out of serialization of a field
     value: f32,
-
     console: ConsoleWindow,
 }
 
@@ -74,10 +72,8 @@ impl eframe::App for ConsoleDemo {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            let mut console_window_open = true;
             let mut console_response: ConsoleEvent = ConsoleEvent::None;
             egui::Window::new("Console Window")
-                .open(&mut console_window_open)
                 .default_height(500.0)
                 .resizable(true)
                 .show(ctx, |ui| {
