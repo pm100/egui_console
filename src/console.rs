@@ -125,10 +125,7 @@ impl ConsoleWindow {
     /// # Arguments
     /// * `data` - the string to write
     ///
-    /// # Example
-    /// ```rust
-    /// use egui_console::console::{ConsoleBuilder, ConsoleWindow, ConsoleEvent};
-    /// use egui::Ui;
+    /// Note that you can call this without the user having typed anything.
     ///
     pub fn write(&mut self, data: &str) {
         self.text.push_str(&format!("\n{}", data));
@@ -140,11 +137,6 @@ impl ConsoleWindow {
     /// # Arguments
     /// * `history` - an iterator of strings
     ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use egui_console::console::{ConsoleBuilder, ConsoleWindow, ConsoleEvent};
-    /// use egui::Ui;
     ///
     pub fn load_history(&mut self, history: Lines<'_>) {
         self.command_history = history.into_iter().map(|s| s.to_string()).collect();
