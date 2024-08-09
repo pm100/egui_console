@@ -8,7 +8,7 @@ exclude = [
 ]
 license = "MIT"
 description = "A Console Window for egui"
-repository = "https://github.vom/pm100/egui_console"
+repository = "https://github.com/pm100/egui_console"
 readme = "README.md"
 keywords=["egui","widget","console"]
 categories=["gui"]
