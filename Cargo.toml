@@ -1,7 +1,7 @@
 workspace = { members = ["demo"] }
 [package]
 name = "egui_console"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 exclude = [
     ".vscode"
