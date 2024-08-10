@@ -55,3 +55,6 @@ version = "0.3.4"
 # If you fork https://github.com/emilk/egui you can test with:
 # egui = { path = "../egui/crates/egui" }
 # eframe = { path = "../egui/crates/eframe" }
+[features]
+default=["persistence"]
+persistence=[]

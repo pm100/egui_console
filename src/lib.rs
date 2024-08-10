@@ -57,7 +57,7 @@
 /// Alternatively you can use [`ConsoleWindow::load_history`] and [`ConsoleWindow::get_history`] to manually save and load the command history.    
 #[warn(missing_docs)]
 pub mod console;
-
+mod tab;
 pub use crate::console::ConsoleBuilder;
 pub use crate::console::ConsoleEvent;
 pub use crate::console::ConsoleWindow;

@@ -3,13 +3,14 @@ use anyhow::Result;
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 //use egui_console::console::{ConsoleBuilder, ConsoleEvent, ConsoleWindow};
 use egui_console::{ConsoleBuilder, ConsoleEvent, ConsoleWindow};
-
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(default)] // if we add new fields, give them default values when deserializing old state
+#[cfg_attr(feature = "persistence", derive(serde::Deserialize, serde::Serialize))]
+//#[derive(serde::Deserialize, serde::Serialize)]
+#[cfg_attr(feature = "persistence", serde(default))] // if we add new fields, give them default values when deserializing old state
 pub struct ConsoleDemo {
     // Example stuff:
     label: String,
-    #[serde(skip)] // This how you opt-out of serialization of a field
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    // This how you opt-out of serialization of a field
     value: f32,
     console: ConsoleWindow,
 }
@@ -33,6 +34,7 @@ impl ConsoleDemo {
 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
+        #[cfg(feature = "persistence")]
         if let Some(storage) = cc.storage {
             return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
         }
@@ -44,6 +46,7 @@ impl ConsoleDemo {
 impl eframe::App for ConsoleDemo {
     /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        #[cfg(feature = "persistence")]
         eframe::set_value(storage, eframe::APP_KEY, self);
     }
 

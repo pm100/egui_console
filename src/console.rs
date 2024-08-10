@@ -41,6 +41,10 @@ pub struct ConsoleWindow {
     // enable running stuff after serde reload
     #[cfg_attr(feature = "persistence", serde(skip))]
     init_done: bool,
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    tab_string: String,
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    tab_nth: usize,
 }
 
 impl ConsoleWindow {
@@ -61,6 +65,8 @@ impl ConsoleWindow {
             save_prompt: None,
             search_partial: None,
             init_done: false,
+            tab_string: String::new(),
+            tab_nth: 0,
         }
     }
     /// Draw the console window
@@ -104,6 +110,8 @@ impl ConsoleWindow {
                     self.history_cursor = None;
                     self.history_back();
                 }
+                self.tab_string.clear();
+                self.tab_nth = 0;
             }
         }
 
@@ -112,7 +120,7 @@ impl ConsoleWindow {
             escape: true,
             horizontal_arrows: true,
             vertical_arrows: true,
-            tab: false,
+            tab: true, // we need the tab key for tab completion
         };
         if ui.ctx().memory(|mem| mem.has_focus(self.id)) {
             ui.ctx()
@@ -410,6 +418,30 @@ impl ConsoleWindow {
                 }
                 (true, None)
             }
+            (Modifiers::NONE, Key::Tab) => {
+                let last_arg = {
+                    let last = self.get_last_line();
+                    let args = last.split_whitespace();
+                    args.last().unwrap_or("").to_string()
+                };
+                if self.tab_string.is_empty() {
+                    self.tab_string = last_arg.to_string();
+                    self.tab_nth = 0;
+                } else {
+                    self.tab_nth += 1;
+                }
+                if last_arg.is_empty() {
+                    return (true, None);
+                }
+                if let Some(path) = crate::tab::tab_complete(&self.tab_string, self.tab_nth) {
+                    let last = self.get_last_line();
+                    self.text = self.text.strip_suffix(last).unwrap_or("").to_string();
+                    // self.write(&path.path().to_str().unwrap());
+                    self.text.push_str(&path.path().to_str().unwrap());
+                }
+                (true, None)
+            }
+
             _ => (false, None),
         };
 
