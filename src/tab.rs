@@ -1,4 +1,4 @@
-use std::{fs::DirEntry, path::PathBuf};
+use std::path::PathBuf;
 
 pub(crate) fn tab_complete(search: &str, nth: usize) -> Option<PathBuf> {
     let use_backslash = if cfg!(target_os = "windows") && search.find('\\').is_some() {
@@ -20,15 +20,13 @@ pub(crate) fn tab_complete(search: &str, nth: usize) -> Option<PathBuf> {
             return None;
         } else {
             search_path = parent.unwrap().to_path_buf();
-            if search_path.display().to_string().len() == 0 {
+            if search_path.display().to_string().is_empty() {
                 search_path = PathBuf::from(use_backslash);
                 added_dot = true;
                 break search_path;
-            } else {
-                if search_path.display().to_string() == "." {
-                    search_path = PathBuf::from(use_backslash);
-                    break search_path;
-                }
+            } else if search_path.display().to_string() == "." {
+                search_path = PathBuf::from(use_backslash);
+                break search_path;
             }
         }
     };

@@ -434,7 +434,7 @@ impl ConsoleWindow {
                     if let Some(find) = self.text.rfind(&self.tab_string) {
                         self.text.truncate(find);
                         self.new_line = true;
-                        self.text.push_str(&path.to_str().unwrap());
+                        self.text.push_str(path.to_str().unwrap());
                     }
                 } else {
                     self.tab_nth = 0;
