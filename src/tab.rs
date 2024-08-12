@@ -1,68 +1,70 @@
 use std::{fs::DirEntry, path::PathBuf};
 
-pub(crate) fn tab_complete(search: &str, nth: usize) -> Option<DirEntry> {
+pub(crate) fn tab_complete(search: &str, nth: usize) -> Option<PathBuf> {
+    let use_backslash = if cfg!(target_os = "windows") && search.find('\\').is_some() {
+        ".\\"
+    } else {
+        "./"
+    };
     let mut search_path = PathBuf::from(search);
+
     let mut nth = nth;
-    let base_search = loop {
+    let mut added_dot = false;
+
+    let mut base_search = loop {
         if search_path.is_dir() {
             break search_path;
         }
-        let y = search_path.parent();
-        if y.is_none() {
+        let parent = search_path.parent();
+        if parent.is_none() {
             return None;
         } else {
-            search_path = y.unwrap().to_path_buf();
+            search_path = parent.unwrap().to_path_buf();
+            if search_path.display().to_string().len() == 0 {
+                search_path = PathBuf::from(use_backslash);
+                added_dot = true;
+                break search_path;
+            } else {
+                if search_path.display().to_string() == "." {
+                    search_path = PathBuf::from(use_backslash);
+                    break search_path;
+                }
+            }
         }
     };
-    //   let orig_canon = root_path.canonicalize().ok()?;
-    // let search_str = search.to_string_lossy();
-    // let root_path = if search.is_dir() {
-    //     search
-    // } else {
-    //     search.parent().unwrap().to_path_buf()
-    // };
-    // if !root_path.is_dir() {
-    //     return None;
-    // };
-    // let search_str = search.to_string_lossy();
-    // let root_path = root_path.canonicalize().ok()?;
+
+    if base_search.display().to_string() == ".." {
+        base_search = PathBuf::from(format!(".{}", use_backslash));
+    }
+
     println!("root_path: {}", base_search.display());
     let x = std::fs::read_dir(&base_search);
 
     if let Ok(entries) = x {
         for e in entries {
             if let Ok(ent) = e {
-                println!("ent: {} {}", ent.path().display(), nth);
-                if ent.path().display().to_string().starts_with(search) {
+                let mut ret_path = ent.path();
+                if added_dot {
+                    ret_path = ret_path.strip_prefix(use_backslash).ok()?.to_path_buf();
+                }
+                println!(
+                    "ent: {} {} {} {} {}",
+                    ent.path().display(),
+                    nth,
+                    ret_path.display(),
+                    search,
+                    added_dot
+                );
+
+                if ret_path.display().to_string().starts_with(search) {
                     if nth == 0 {
-                        return Some(ent);
+                        return Some(ret_path);
                     } else {
                         nth -= 1;
                     }
                 }
             }
         }
-        //     let ent = entries
-        //         .filter(|ent| {
-        //             println!("ent: {:?}", ent);
-        //             if let Ok(ent) = ent {
-        //                 let canon = ent.path().canonicalize();
-        //                 if let Ok(c) = canon {
-        //                     let cx = c.to_string_lossy();
-        //                     println!("cx: {} xs {}", cx, orig_canon);
-        //                     return cx.starts_with(orig_canon.as_ref());
-        //                 } else {
-        //                     return false;
-        //                 }
-        //             } else {
-        //                 return false;
-        //             }
-        //         })
-        //         .nth(nth);
-
-        //     if let Some(entry) = ent {
-        //         return Some(entry.unwrap());
-        //     }
     }
     None
 }

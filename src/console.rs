@@ -193,7 +193,6 @@ impl ConsoleWindow {
                     .frame(false)
                     .code_editor()
                     .lock_focus(true)
-                    .desired_width(0.0f32)
                     .desired_width(f32::INFINITY)
                     .id(self.id);
                 let output = widget.show(ui);
@@ -419,11 +418,9 @@ impl ConsoleWindow {
                 (true, None)
             }
             (Modifiers::NONE, Key::Tab) => {
-                let last_arg = {
-                    let last = self.get_last_line();
-                    let args = last.split_whitespace();
-                    args.last().unwrap_or("").to_string()
-                };
+                let last = self.get_last_line();
+                let args = last.split_whitespace();
+                let last_arg = args.last().unwrap_or("").to_string();
                 if self.tab_string.is_empty() {
                     self.tab_string = last_arg.to_string();
                     self.tab_nth = 0;
@@ -434,10 +431,13 @@ impl ConsoleWindow {
                     return (true, None);
                 }
                 if let Some(path) = crate::tab::tab_complete(&self.tab_string, self.tab_nth) {
-                    let last = self.get_last_line();
-                    self.text = self.text.strip_suffix(last).unwrap_or("").to_string();
-                    // self.write(&path.path().to_str().unwrap());
-                    self.text.push_str(&path.path().to_str().unwrap());
+                    if let Some(find) = self.text.rfind(&self.tab_string) {
+                        self.text.truncate(find);
+                        self.new_line = true;
+                        self.text.push_str(&path.to_str().unwrap());
+                    }
+                } else {
+                    self.tab_nth = 0;
                 }
                 (true, None)
             }
