@@ -5,12 +5,8 @@ impl ConsoleWindow {
     pub(crate) fn tab_complete(&mut self) -> (bool, Option<String>) {
         if self.tab_string.is_empty() {
             self.tab_quoted = false;
-            let last = self.get_last_line();
-            let args = shlex::split(last);
-            if args.is_none() {
-                return (true, None);
-            }
-            let args = args.unwrap();
+            let last = self.get_last_line().to_string();
+            let args = last.split_ascii_whitespace().collect::<Vec<&str>>();
 
             let last_arg = &args[args.len() - 1];
             if last_arg.is_empty() {
