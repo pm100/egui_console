@@ -113,7 +113,8 @@ impl eframe::App for ConsoleDemo {
 }
 impl ConsoleDemo {
     pub fn dispatch(&mut self, line: &str, ctx: &egui::Context) -> Result<String> {
-        let args = line.split_whitespace();
+        // let args = line.split_whitespace();
+        let args = shlex::split(line).ok_or(anyhow::anyhow!("cannot parse"))?;
         // parse with clap
         let matches = syntax().try_get_matches_from(args)?;
         // execute the command

@@ -6,8 +6,8 @@ impl ConsoleWindow {
         if self.tab_string.is_empty() {
             self.tab_quoted = false;
             let last = self.get_last_line().to_string();
-            let args = last.split_ascii_whitespace().collect::<Vec<&str>>();
-
+            // let args = last.split_ascii_whitespace().collect::<Vec<&str>>();
+            let args = self.digest_line(&last);
             let last_arg = &args[args.len() - 1];
             if last_arg.is_empty() {
                 return (true, None);
@@ -61,12 +61,14 @@ impl ConsoleWindow {
     }
 
     fn digest_line(&mut self, line: &str) -> Vec<String> {
-        let chunks: Vec<&str> = line.split_ascii_whitespace().map(|c| c).collect();
+        let chunks: Vec<&str> = line.split_ascii_whitespace().collect();
 
         let mut result: Vec<String> = Vec::new();
         for (i, chunk) in chunks.iter().enumerate() {
-            if chunk.ends_with('"') && !chunk.starts_with('"') {
-                if chunks[i - 1].starts_with('"') && !chunks[i - 1].ends_with('"') {
+            if chunk.ends_with(self.tab_quote) && !chunk.starts_with(self.tab_quote) && i > 0 {
+                if chunks[i - 1].starts_with(self.tab_quote)
+                    && !chunks[i - 1].ends_with(self.tab_quote)
+                {
                     result[i - 1].push(' ');
                     result[i - 1].push_str(chunk);
                     continue;
@@ -150,4 +152,12 @@ fn test_digest_line() {
     assert_eq!(result, vec!["cd", "foo"]);
     let result = console.digest_line("cd \"foo bar\"");
     assert_eq!(result, vec!["cd", "\"foo bar\""]);
+    let result = console.digest_line("cd \"foo bar");
+    assert_eq!(result, vec!["cd", "\"foo", "bar"]);
+    let result = console.digest_line("cd foo bar\"");
+    assert_eq!(result, vec!["cd", "foo", "bar\""]);
+    let result = console.digest_line("\"cd foo bar\"");
+    assert_eq!(result, vec!["\"cd", "foo", "bar\""]);
+    let result = console.digest_line("cd\" foo bar\"");
+    assert_eq!(result, vec!["cd\"", "foo", "bar\""]);
 }
