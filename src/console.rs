@@ -1,8 +1,10 @@
-use std::{collections::VecDeque, str::Lines, sync::atomic::AtomicU16};
+use std::{collections::VecDeque, path::PathBuf, str::Lines, sync::atomic::AtomicU16};
 
 use egui::{
     text::CCursorRange, Align, Context, Event, EventFilter, Id, Key, Modifiers, TextEdit, Ui,
 };
+
+use crate::tab;
 static SEARCH_PROMPT: &str = "(reverse-i-search) :";
 const SEARCH_PROMPT_SLOT_OFF: usize = 18;
 static INSTANCE_COUNT: AtomicU16 = AtomicU16::new(0);
@@ -24,9 +26,9 @@ pub enum ConsoleEvent {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConsoleWindow {
     #[cfg_attr(feature = "persistence", serde(skip))]
-    text: String,
+    pub(crate) text: String,
     #[cfg_attr(feature = "persistence", serde(skip))]
-    new_line: bool,
+    pub(crate) force_cursor_to_end: bool,
     history_size: usize,
     pub(crate) scrollback_size: usize,
     command_history: VecDeque<String>,
@@ -42,16 +44,21 @@ pub struct ConsoleWindow {
     #[cfg_attr(feature = "persistence", serde(skip))]
     init_done: bool,
     #[cfg_attr(feature = "persistence", serde(skip))]
-    tab_string: String,
+    pub(crate) tab_string: String,
     #[cfg_attr(feature = "persistence", serde(skip))]
-    tab_nth: usize,
+    pub(crate) tab_nth: usize,
+    pub(crate) tab_quote: char,
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    pub(crate) tab_quoted: bool,
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    pub(crate) tab_offset: usize,
 }
 
 impl ConsoleWindow {
-    fn new(prompt: &str) -> Self {
+    pub(crate) fn new(prompt: &str) -> Self {
         Self {
             text: String::new(),
-            new_line: false,
+            force_cursor_to_end: false,
             command_history: VecDeque::new(),
             history_cursor: None,
             history_size: 100,
@@ -67,6 +74,9 @@ impl ConsoleWindow {
             init_done: false,
             tab_string: String::new(),
             tab_nth: 0,
+            tab_quote: '"',
+            tab_quoted: false,
+            tab_offset: usize::MAX,
         }
     }
     /// Draw the console window
@@ -138,7 +148,7 @@ impl ConsoleWindow {
     pub fn write(&mut self, data: &str) {
         self.text.push_str(&format!("\n{}", data));
         self.truncate_scroll_back();
-        self.new_line = true;
+        self.force_cursor_to_end = true;
     }
 
     /// Loads the history from an iterator of strings
@@ -169,7 +179,7 @@ impl ConsoleWindow {
     /// Clear the console
     pub fn clear(&mut self) {
         self.text.clear();
-        self.new_line = false;
+        self.force_cursor_to_end = false;
     }
     /// Prompt the user for input
     pub fn prompt(&mut self) {
@@ -231,9 +241,10 @@ impl ConsoleWindow {
                         }
 
                         // we need a new line (user pressed enter)
-                        if self.new_line {
+                        if self.force_cursor_to_end {
                             new_cursor = Some(self.cursor_at_end());
-                            self.new_line = false;
+                            self.force_cursor_to_end = false;
+                            //  self.tab_quoted = false;
                         }
                     }
                 };
@@ -252,7 +263,7 @@ impl ConsoleWindow {
         });
     }
 
-    fn get_last_line(&self) -> &str {
+    pub(crate) fn get_last_line(&self) -> &str {
         self.text
             .lines()
             .last()
@@ -341,7 +352,7 @@ impl ConsoleWindow {
                 }
                 self.command_history.push_back(last.clone());
 
-                self.new_line = true;
+                self.force_cursor_to_end = true;
                 self.history_cursor = None;
                 self.truncate_scroll_back();
                 (true, Some(last))
@@ -418,28 +429,67 @@ impl ConsoleWindow {
                 (true, None)
             }
             (Modifiers::NONE, Key::Tab) => {
-                let last = self.get_last_line();
-                let args = last.split_whitespace();
-                let last_arg = args.last().unwrap_or("").to_string();
-                if self.tab_string.is_empty() {
-                    self.tab_string = last_arg.to_string();
-                    self.tab_nth = 0;
-                } else {
-                    self.tab_nth += 1;
-                }
-                if last_arg.is_empty() {
-                    return (true, None);
-                }
-                if let Some(path) = crate::tab::tab_complete(&self.tab_string, self.tab_nth) {
-                    if let Some(find) = self.text.rfind(&self.tab_string) {
-                        self.text.truncate(find);
-                        self.new_line = true;
-                        self.text.push_str(path.to_str().unwrap());
-                    }
-                } else {
-                    self.tab_nth = 0;
-                }
-                (true, None)
+                return self.tab_complete();
+                // if self.tab_string.is_empty() {
+                //     self.tab_quoted = false;
+                //     let last = self.get_last_line();
+                //     let args = shlex::split(last);
+                //     if args.is_none() {
+                //         return (true, None);
+                //     }
+                //     let args = args.unwrap();
+
+                //     let last_arg = &args[args.len() - 1];
+                //     if last_arg.is_empty() {
+                //         return (true, None);
+                //     }
+                //     println!("{} {} {}", last_arg, self.tab_string, last);
+                //     self.tab_string = last_arg.to_string();
+                //     self.tab_nth = 0;
+                //     self.tab_offset = self.text.len() - last_arg.len();
+                // } else {
+                //     self.tab_nth += 1; //self.tab_nth.wrapping_add(1);
+                // }
+                // loop {
+                //     if let Some(mut path) = crate::tab::tab_complete(&self.tab_string, self.tab_nth)
+                //     {
+                //         let mut added_quotes = false;
+                //         let mut remove_quotes = self.tab_quoted;
+                //         if path.display().to_string().contains(' ') {
+                //             path = PathBuf::from(format!(
+                //                 "{}{}{}",
+                //                 self.tab_quote,
+                //                 path.display(),
+                //                 self.tab_quote
+                //             ));
+                //             added_quotes = true;
+                //             remove_quotes = false;
+                //         }
+                //         println!(
+                //             "{} {} {} {}",
+                //             added_quotes, remove_quotes, self.tab_quoted, self.tab_offset
+                //         );
+
+                //         let tab_off = if self.tab_quoted || remove_quotes {
+                //             self.tab_offset
+                //         } else {
+                //             self.tab_offset
+                //         };
+                //         self.text.truncate(tab_off);
+                //         self.force_cursor_to_end = true;
+                //         self.text.push_str(path.to_str().unwrap());
+
+                //         self.tab_quoted = added_quotes;
+                //         break;
+                //     } else {
+                //         if self.tab_nth == 0 {
+                //             break;
+                //         }
+                //         // force wrap around to first match
+                //         self.tab_nth = 0;
+                //     }
+                // }
+                // (true, None)
             }
 
             _ => (false, None),
@@ -495,7 +545,7 @@ impl ConsoleWindow {
         let last_off = self.last_line_offset();
         self.text.truncate(last_off);
         self.draw_prompt();
-        self.new_line = true;
+        self.force_cursor_to_end = true;
     }
     fn exit_search_mode(&mut self) {
         self.prompt = self.save_prompt.take().unwrap();
@@ -504,7 +554,7 @@ impl ConsoleWindow {
         self.text.truncate(last_off);
         self.draw_prompt();
         self.search_partial = None;
-        self.new_line = true;
+        self.force_cursor_to_end = true;
     }
     fn draw_prompt(&mut self) {
         if !self.text.is_empty() && !self.text.ends_with('\n') {
