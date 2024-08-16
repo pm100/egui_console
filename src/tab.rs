@@ -67,6 +67,7 @@ impl ConsoleWindow {
         for (i, chunk) in chunks.iter().enumerate() {
             if chunk.ends_with('"') && !chunk.starts_with('"') {
                 if chunks[i - 1].starts_with('"') && !chunks[i - 1].ends_with('"') {
+                    result[i - 1].push(' ');
                     result[i - 1].push_str(chunk);
                     continue;
                 }
