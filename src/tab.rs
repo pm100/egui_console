@@ -2,23 +2,37 @@ use std::path::PathBuf;
 
 use crate::ConsoleWindow;
 impl ConsoleWindow {
-    pub(crate) fn tab_complete(&mut self) -> (bool, Option<String>) {
+    pub(crate) fn tab_complete(&mut self) {
         if self.tab_string.is_empty() {
+            // means we are entering tab search mode
+
+            // the main fiddling here is for path with spaces in them on mac and windows
+            // the user can enter a partial path with quotes, which we have to strip before passing to the
+            // fs tabber and reinstate after an answer comes back
+            // else if we get a path with spaces in it from the fs tabber we have to add quotes
+
             self.tab_quoted = false;
             let last = self.get_last_line().to_string();
-            // let args = last.split_ascii_whitespace().collect::<Vec<&str>>();
+
             let args = self.digest_line(&last);
             let last_arg = &args[args.len() - 1];
             if last_arg.is_empty() {
-                return (true, None);
+                return;
             }
-            println!("{} {} {}", last_arg, self.tab_string, last);
-            self.tab_string = last_arg.to_string();
+            if last_arg.starts_with(self.tab_quote) {
+                self.tab_string = last_arg.strip_prefix(self.tab_quote).unwrap().to_string();
+            }
+            //println!("{} {} {}", last_arg, self.tab_string, last);
+            else {
+                self.tab_string = last_arg.to_string()
+            };
             self.tab_nth = 0;
             self.tab_offset = self.text.len() - last_arg.len();
         } else {
-            self.tab_nth += 1; //self.tab_nth.wrapping_add(1);
+            // otherwise move to the next match
+            self.tab_nth += 1;
         }
+        // the loop gets us back to the first match once fs tabber returns no match
         loop {
             if let Some(mut path) = fs_tab_complete(&self.tab_string, self.tab_nth) {
                 let mut added_quotes = false;
@@ -38,18 +52,14 @@ impl ConsoleWindow {
                     added_quotes, remove_quotes, self.tab_quoted, self.tab_offset
                 );
 
-                let tab_off = if self.tab_quoted || remove_quotes {
-                    self.tab_offset
-                } else {
-                    self.tab_offset
-                };
-                self.text.truncate(tab_off);
+                self.text.truncate(self.tab_offset);
                 self.force_cursor_to_end = true;
                 self.text.push_str(path.to_str().unwrap());
 
                 self.tab_quoted = added_quotes;
                 break;
             } else {
+                // exit if there were no matches at all
                 if self.tab_nth == 0 {
                     break;
                 }
@@ -57,7 +67,6 @@ impl ConsoleWindow {
                 self.tab_nth = 0;
             }
         }
-        (true, None)
     }
 
     fn digest_line(&mut self, line: &str) -> Vec<String> {
@@ -79,39 +88,45 @@ impl ConsoleWindow {
         result
     }
 }
+
+// return the nth matching path, or None if there isnt one
 pub(crate) fn fs_tab_complete(search: &str, nth: usize) -> Option<PathBuf> {
-    let use_backslash = if cfg!(target_os = "windows") && search.find('\\').is_some() {
+    let dot_slash = if cfg!(target_os = "windows") && search.find('\\').is_some() {
         ".\\"
     } else {
         "./"
     };
-    let mut search_path = PathBuf::from(search);
+    let search_path = PathBuf::from(search);
 
     let mut nth = nth;
     let mut added_dot = false;
 
-    let mut base_search = loop {
-        if search_path.is_dir() {
-            break search_path;
-        }
+    // were we given a real path to start with?
+
+    let mut base_search = if search_path.is_dir() {
+        search_path
+    } else {
+        // no - look at the parent (ie we got "cd dir/f")
         let parent = search_path.parent();
         if parent.is_none() {
             return None;
         } else {
-            search_path = parent.unwrap().to_path_buf();
-            if search_path.display().to_string().is_empty() {
-                search_path = PathBuf::from(use_backslash);
+            let p = parent.unwrap().to_path_buf();
+            // if empty parent then search "." (remember we added the dot so remove it later)
+            if p.display().to_string().is_empty() {
                 added_dot = true;
-                break search_path;
-            } else if search_path.display().to_string() == "." {
-                search_path = PathBuf::from(use_backslash);
-                break search_path;
+                PathBuf::from(dot_slash)
+            } else if p.display().to_string() == "." {
+                // we were given . as a dir
+                PathBuf::from(dot_slash)
+            } else {
+                p
             }
         }
     };
-
+    // convert .. to ../ or ..\
     if base_search.display().to_string() == ".." {
-        base_search = PathBuf::from(format!(".{}", use_backslash));
+        base_search = PathBuf::from(format!(".{}", dot_slash));
     }
 
     println!("root_path: {}", base_search.display());
@@ -122,7 +137,7 @@ pub(crate) fn fs_tab_complete(search: &str, nth: usize) -> Option<PathBuf> {
             if let Ok(ent) = e {
                 let mut ret_path = ent.path();
                 if added_dot {
-                    ret_path = ret_path.strip_prefix(use_backslash).ok()?.to_path_buf();
+                    ret_path = ret_path.strip_prefix(dot_slash).ok()?.to_path_buf();
                 }
                 // println!(
                 //     "ent: {} {} {} {} {}",

@@ -1,10 +1,9 @@
-use std::{collections::VecDeque, path::PathBuf, str::Lines, sync::atomic::AtomicU16};
+use std::{collections::VecDeque, str::Lines, sync::atomic::AtomicU16};
 
 use egui::{
     text::CCursorRange, Align, Context, Event, EventFilter, Id, Key, Modifiers, TextEdit, Ui,
 };
 
-use crate::tab;
 static SEARCH_PROMPT: &str = "(reverse-i-search) :";
 const SEARCH_PROMPT_SLOT_OFF: usize = 18;
 static INSTANCE_COUNT: AtomicU16 = AtomicU16::new(0);
@@ -91,10 +90,9 @@ impl ConsoleWindow {
         if !self.init_done {
             self.init_done = true;
             if let Some(prompt) = &self.save_prompt {
-                self.prompt = prompt.clone();
+                self.prompt.clone_from(prompt);
                 self.save_prompt = None;
             }
-
             self.draw_prompt();
         }
         // do we need to handle keyboard events?
@@ -429,67 +427,9 @@ impl ConsoleWindow {
                 (true, None)
             }
             (Modifiers::NONE, Key::Tab) => {
-                return self.tab_complete();
-                // if self.tab_string.is_empty() {
-                //     self.tab_quoted = false;
-                //     let last = self.get_last_line();
-                //     let args = shlex::split(last);
-                //     if args.is_none() {
-                //         return (true, None);
-                //     }
-                //     let args = args.unwrap();
-
-                //     let last_arg = &args[args.len() - 1];
-                //     if last_arg.is_empty() {
-                //         return (true, None);
-                //     }
-                //     println!("{} {} {}", last_arg, self.tab_string, last);
-                //     self.tab_string = last_arg.to_string();
-                //     self.tab_nth = 0;
-                //     self.tab_offset = self.text.len() - last_arg.len();
-                // } else {
-                //     self.tab_nth += 1; //self.tab_nth.wrapping_add(1);
-                // }
-                // loop {
-                //     if let Some(mut path) = crate::tab::tab_complete(&self.tab_string, self.tab_nth)
-                //     {
-                //         let mut added_quotes = false;
-                //         let mut remove_quotes = self.tab_quoted;
-                //         if path.display().to_string().contains(' ') {
-                //             path = PathBuf::from(format!(
-                //                 "{}{}{}",
-                //                 self.tab_quote,
-                //                 path.display(),
-                //                 self.tab_quote
-                //             ));
-                //             added_quotes = true;
-                //             remove_quotes = false;
-                //         }
-                //         println!(
-                //             "{} {} {} {}",
-                //             added_quotes, remove_quotes, self.tab_quoted, self.tab_offset
-                //         );
-
-                //         let tab_off = if self.tab_quoted || remove_quotes {
-                //             self.tab_offset
-                //         } else {
-                //             self.tab_offset
-                //         };
-                //         self.text.truncate(tab_off);
-                //         self.force_cursor_to_end = true;
-                //         self.text.push_str(path.to_str().unwrap());
-
-                //         self.tab_quoted = added_quotes;
-                //         break;
-                //     } else {
-                //         if self.tab_nth == 0 {
-                //             break;
-                //         }
-                //         // force wrap around to first match
-                //         self.tab_nth = 0;
-                //     }
-                // }
-                // (true, None)
+                // off to tab completion land
+                self.tab_complete();
+                (true, None)
             }
 
             _ => (false, None),
