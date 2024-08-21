@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use itertools::Itertools;
+
 use crate::ConsoleWindow;
 impl ConsoleWindow {
     pub(crate) fn tab_complete(&mut self) {
@@ -15,15 +17,16 @@ impl ConsoleWindow {
             let last = self.get_last_line().to_string();
 
             let args = self.digest_line(&last);
+            if args.is_empty() {
+                return;
+            }
             let last_arg = &args[args.len() - 1];
             if last_arg.is_empty() {
                 return;
             }
             if last_arg.starts_with(self.tab_quote) {
                 self.tab_string = last_arg.strip_prefix(self.tab_quote).unwrap().to_string();
-            }
-            //println!("{} {} {}", last_arg, self.tab_string, last);
-            else {
+            } else {
                 self.tab_string = last_arg.to_string()
             };
             self.tab_nth = 0;
@@ -36,7 +39,7 @@ impl ConsoleWindow {
         loop {
             if let Some(mut path) = fs_tab_complete(&self.tab_string, self.tab_nth) {
                 let mut added_quotes = false;
-                let mut remove_quotes = self.tab_quoted;
+
                 if path.display().to_string().contains(' ') {
                     path = PathBuf::from(format!(
                         "{}{}{}",
@@ -45,12 +48,7 @@ impl ConsoleWindow {
                         self.tab_quote
                     ));
                     added_quotes = true;
-                    remove_quotes = false;
                 }
-                println!(
-                    "{} {} {} {}",
-                    added_quotes, remove_quotes, self.tab_quoted, self.tab_offset
-                );
 
                 self.text.truncate(self.tab_offset);
                 self.force_cursor_to_end = true;
@@ -68,13 +66,14 @@ impl ConsoleWindow {
             }
         }
     }
-
+    // chop up input line input arguments honoring quotes
     fn digest_line(&mut self, line: &str) -> Vec<String> {
         let chunks: Vec<&str> = line.split_ascii_whitespace().collect();
 
         let mut result: Vec<String> = Vec::new();
         for (i, chunk) in chunks.iter().enumerate() {
             if chunk.ends_with(self.tab_quote) && !chunk.starts_with(self.tab_quote) && i > 0 {
+                //
                 if chunks[i - 1].starts_with(self.tab_quote)
                     && !chunks[i - 1].ends_with(self.tab_quote)
                 {
@@ -87,6 +86,7 @@ impl ConsoleWindow {
         }
         result
     }
+    
 }
 
 // return the nth matching path, or None if there isnt one
@@ -129,31 +129,46 @@ pub(crate) fn fs_tab_complete(search: &str, nth: usize) -> Option<PathBuf> {
         base_search = PathBuf::from(format!(".{}", dot_slash));
     }
 
-    println!("root_path: {}", base_search.display());
-    let x = std::fs::read_dir(&base_search);
+    let dir = std::fs::read_dir(&base_search);
 
-    if let Ok(entries) = x {
-        for e in entries {
-            if let Ok(ent) = e {
-                let mut ret_path = ent.path();
-                if added_dot {
-                    ret_path = ret_path.strip_prefix(dot_slash).ok()?.to_path_buf();
-                }
-                // println!(
-                //     "ent: {} {} {} {} {}",
-                //     ent.path().display(),
-                //     nth,
-                //     ret_path.display(),
-                //     search,
-                //     added_dot
-                // );
+    if let Ok(entries) = dir {
+        // deal with platform oddities, also unwrap everything
 
-                if ret_path.display().to_string().starts_with(search) {
-                    if nth == 0 {
-                        return Some(ret_path);
-                    } else {
-                        nth -= 1;
-                    }
+        // mac retruns things in random order - so sort
+        #[cfg(target_os = "macos")]
+        let entries = entries
+            .filter(|e| e.is_ok())
+            .map(|e| e.unwrap())
+            .sorted_by(|a, b| Ord::cmp(&a.file_name(), &b.file_name()));
+
+        // windows returns things in ascii case sensitive order
+        // this is a surprise to windows users
+        #[cfg(target_os = "windows")]
+        let entries = entries
+            .filter(|e| e.is_ok())
+            .map(|e| e.unwrap())
+            .sorted_by(|a, b| {
+                Ord::cmp(
+                    &a.file_name().to_asciilower(),
+                    &b.file_name().to_ascii_lower(),
+                )
+            });
+
+        // linux is well behaved!
+        #[cfg(target_os = "linux")]
+        let entries = entries.filter(|e| e.is_ok()).map(|e| e.unwrap());
+
+        for ent in entries {
+            let mut ret_path = ent.path();
+            if added_dot {
+                ret_path = ret_path.strip_prefix(dot_slash).ok()?.to_path_buf();
+            }
+
+            if ret_path.display().to_string().starts_with(search) {
+                if nth == 0 {
+                    return Some(ret_path);
+                } else {
+                    nth -= 1;
                 }
             }
         }

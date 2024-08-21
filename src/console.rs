@@ -562,6 +562,7 @@ pub struct ConsoleBuilder {
     prompt: String,
     history_size: usize,
     scrollback_size: usize,
+    tab_quote_character: char,
 }
 
 impl Default for ConsoleBuilder {
@@ -580,6 +581,7 @@ impl ConsoleBuilder {
             prompt: ">> ".to_string(),
             history_size: 100,
             scrollback_size: 1000,
+            tab_quote_character: '\'',
         }
     }
     /// Set the prompt for the console
@@ -615,6 +617,19 @@ impl ConsoleBuilder {
         self.scrollback_size = size;
         self
     }
+
+    /// Set the character used to quote tab completed
+    /// path containing spaces
+    /// # Arguments
+    /// * `quote` - character to use
+    ///
+    /// # Returns
+    /// * `ConsoleBuilder` - the console builder
+    ///
+    pub fn tab_quote_character(mut self, quote: char) -> Self {
+        self.tab_quote_character = quote;
+        self
+    }
     /// Build the console window
     /// # Returns
     /// * `ConsoleWindow` - the console window
@@ -624,6 +639,7 @@ impl ConsoleBuilder {
         let mut cons = ConsoleWindow::new(&self.prompt);
         cons.history_size = self.history_size;
         cons.scrollback_size = self.scrollback_size;
+        cons.tab_quote = self.tab_quote_character;
         cons
     }
 }

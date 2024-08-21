@@ -21,7 +21,11 @@ impl Default for ConsoleDemo {
             // Example stuff:
             label: "Hello World!".to_owned(),
             value: 2.7,
-            console: ConsoleBuilder::new().prompt(">> ").history_size(20).build(),
+            console: ConsoleBuilder::new()
+                .prompt(">> ")
+                .history_size(20)
+                .tab_quote_character('\"')
+                .build(),
         }
     }
 }
