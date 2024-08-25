@@ -12,7 +12,7 @@ pub struct ConsoleDemo {
     #[cfg_attr(feature = "persistence", serde(skip))]
     // This how you opt-out of serialization of a field
     value: f32,
-    console: ConsoleWindow,
+    console_win: ConsoleWindow,
 }
 
 impl Default for ConsoleDemo {
@@ -21,7 +21,7 @@ impl Default for ConsoleDemo {
             // Example stuff:
             label: "Hello World!".to_owned(),
             value: 2.7,
-            console: ConsoleBuilder::new()
+            console_win: ConsoleBuilder::new()
                 .prompt(">> ")
                 .history_size(20)
                 .tab_quote_character('\"')
@@ -39,11 +39,18 @@ impl ConsoleDemo {
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
         #[cfg(feature = "persistence")]
-        if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+        let mut app = if let Some(storage) = cc.storage {
+            eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
+        } else {
+            Self::default()
+        };
+        for cmd in syntax().get_subcommands() {
+            app.console_win
+                .command_table_mut()
+                .push(cmd.get_name().to_string());
         }
 
-        Default::default()
+        app
     }
 }
 
@@ -77,14 +84,22 @@ impl eframe::App for ConsoleDemo {
                 egui::widgets::global_dark_light_mode_buttons(ui);
             });
         });
-
+        egui::SidePanel::left("left_panel")
+            .resizable(true)
+            .default_width(150.0)
+            .width_range(80.0..=200.0)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.heading("Left Panel");
+                });
+            });
         egui::CentralPanel::default().show(ctx, |ui| {
             let mut console_response: ConsoleEvent = ConsoleEvent::None;
             egui::Window::new("Console Window")
                 .default_height(500.0)
                 .resizable(true)
                 .show(ctx, |ui| {
-                    console_response = self.console.draw(ui);
+                    console_response = self.console_win.draw(ui);
                 });
             if let ConsoleEvent::Command(command) = console_response {
                 let resp = match self.dispatch(&command, ctx) {
@@ -103,14 +118,14 @@ impl eframe::App for ConsoleDemo {
                     Ok(string) => string, // continue
                 };
                 if !resp.is_empty() {
-                    self.console.write(&resp);
+                    self.console_win.write(&resp);
                 }
-                self.console.prompt();
+                self.console_win.prompt();
             }
 
             if ui.button("click").clicked() {
-                self.console.write("clicked");
-                self.console.prompt();
+                self.console_win.write("clicked");
+                self.console_win.prompt();
             }
         });
     }
@@ -145,7 +160,7 @@ impl ConsoleDemo {
                 Ok("Bye".to_string())
             }
             Some(("clear_screen", _)) => {
-                self.console.clear();
+                self.console_win.clear();
                 Ok("".to_string())
             }
             Some(("dir", args)) => {
@@ -166,7 +181,7 @@ impl ConsoleDemo {
                 Ok(result)
             }
             Some(("history", _)) => {
-                let history = self.console.get_history();
+                let history = self.console_win.get_history();
                 let mut result = String::new();
                 for (i, line) in history.iter().enumerate() {
                     result.push_str(&format!("{}: {}\n", i, line));
@@ -174,7 +189,7 @@ impl ConsoleDemo {
                 Ok(result)
             }
             Some(("clear_history", _)) => {
-                self.console.clear_history();
+                self.console_win.clear_history();
                 Ok("".to_string())
             }
             _ => Ok("Unknown command".to_string()),

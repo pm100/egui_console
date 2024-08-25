@@ -3,8 +3,32 @@ use std::path::PathBuf;
 use itertools::Itertools;
 
 use crate::ConsoleWindow;
+#[derive(Debug)]
+#[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+pub(crate) struct TabCompleter {
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    tab_string: String,
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    tab_nth: usize,
+    tab_quote: char,
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    tab_quoted: bool,
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    tab_offset: usize,
+    tab_command_table: Vec<String>,
+    tab_command_column: usize,
+}
 impl ConsoleWindow {
     pub(crate) fn tab_complete(&mut self) {
+        let last = self.get_last_line().to_string();
+
+        let args = ConsoleWindow::digest_line2(&last);
+        if args.is_empty() {
+            return;
+        }
+        let last_arg = &args[args.len() - 1];
+        let is_command_arg = args.len() == 1;
+        let mut quote_char = self.tab_quote;
         if self.tab_string.is_empty() {
             // means we are entering tab search mode
 
@@ -14,18 +38,14 @@ impl ConsoleWindow {
             // else if we get a path with spaces in it from the fs tabber we have to add quotes
 
             self.tab_quoted = false;
-            let last = self.get_last_line().to_string();
 
-            let args = self.digest_line(&last);
-            if args.is_empty() {
-                return;
-            }
-            let last_arg = &args[args.len() - 1];
             if last_arg.is_empty() {
                 return;
             }
-            if last_arg.starts_with(self.tab_quote) {
-                self.tab_string = last_arg.strip_prefix(self.tab_quote).unwrap().to_string();
+
+            if &last_arg[0..1] == "\'" || &last_arg[0..1] == "\"" {
+                self.tab_string = last_arg[1..].to_string();
+                quote_char = last_arg.chars().next().unwrap();
             } else {
                 self.tab_string = last_arg.to_string()
             };
@@ -37,16 +57,15 @@ impl ConsoleWindow {
         }
         // the loop gets us back to the first match once fs tabber returns no match
         loop {
-            if let Some(mut path) = fs_tab_complete(&self.tab_string, self.tab_nth) {
+            if let Some(mut path) = if is_command_arg {
+                cmd_tab_complete(&self.tab_string, self.tab_nth, &self.tab_command_table)
+            } else {
+                fs_tab_complete(&self.tab_string, self.tab_nth)
+            } {
                 let mut added_quotes = false;
 
                 if path.display().to_string().contains(' ') {
-                    path = PathBuf::from(format!(
-                        "{}{}{}",
-                        self.tab_quote,
-                        path.display(),
-                        self.tab_quote
-                    ));
+                    path = PathBuf::from(format!("{}{}{}", quote_char, path.display(), quote_char));
                     added_quotes = true;
                 }
 
@@ -86,9 +105,94 @@ impl ConsoleWindow {
         }
         result
     }
-    
-}
 
+    fn digest_line2(line: &str) -> Vec<&str> {
+        enum State {
+            InQuotes(char),
+            InWhite,
+            InWord,
+            NotSure,
+        }
+
+        let mut state = State::InWord;
+
+        let mut res: Vec<&str> = Vec::new();
+        let mut start = 0;
+
+        for (idx, ch) in line.char_indices() {
+            match state {
+                State::InWord => match ch {
+                    ' ' => {
+                        res.push(&line[start..idx]);
+                        state = State::InWhite;
+                        //println!("InWhite: {}", &line[start..idx]);
+                    }
+                    '"' | '\'' => {
+                        // quote_char = Some(ch);
+                        state = State::InQuotes(ch);
+                        start = idx;
+                        //  println!("InQuote1: {}", &line[start..idx]);
+                    }
+                    _ => {}
+                },
+                State::InWhite => match ch {
+                    ' ' => {}
+                    '"' | '\'' => {
+                        //   quote_char = Some(ch);
+                        state = State::InQuotes(ch);
+                        start = idx;
+                        // println!("InQuote2: {}", &line[start..idx]);
+                    }
+                    _ => {
+                        start = idx;
+                        state = State::InWord;
+                        // println!("InWord1: {}", &line[start..idx]);
+                    }
+                },
+                State::InQuotes(qc) => {
+                    if ch == qc {
+                        res.push(&line[start..idx + 1]);
+                        state = State::NotSure;
+
+                        // println!("NotSure: {}", &line[start..idx + 1]);
+                        start = idx;
+                    }
+                }
+                State::NotSure => {
+                    if ch == ' ' {
+                        state = State::InWhite;
+                        //  println!("InWhite2: {}", &line[start..idx]);
+                    } else {
+                        state = State::InWord;
+                        // println!("InWord2: {}", &line[start..idx]);
+                    }
+                    start = idx;
+                }
+            }
+        }
+        match state {
+            State::InWord => res.push(&line[start..]),
+            State::InWhite => res.push(""),
+            State::InQuotes(_) => res.push(&line[start..]),
+            State::NotSure => {}
+        }
+        // res.push(&line[start..]);
+        println!("digested {:?}", res);
+        res
+    }
+}
+pub(crate) fn cmd_tab_complete(
+    search: &str,
+    nth: usize,
+    commands: &Vec<String>,
+) -> Option<PathBuf> {
+    commands
+        .iter()
+        .filter(|c| c.starts_with(search))
+        .nth(nth)
+        .map(|c| PathBuf::from(c))
+    //None
+}
 // return the nth matching path, or None if there isnt one
 pub(crate) fn fs_tab_complete(search: &str, nth: usize) -> Option<PathBuf> {
     let dot_slash = if cfg!(target_os = "windows") && search.find('\\').is_some() {
@@ -190,4 +294,22 @@ fn test_digest_line() {
     assert_eq!(result, vec!["\"cd", "foo", "bar\""]);
     let result = console.digest_line("cd\" foo bar\"");
     assert_eq!(result, vec!["cd\"", "foo", "bar\""]);
+}
+#[test]
+fn test_digest_line2() {
+    // let mut console = ConsoleWindow::new(">> ");
+    let result = ConsoleWindow::digest_line2("cd foo");
+    assert_eq!(result, vec!["cd", "foo"]);
+    let result = ConsoleWindow::digest_line2("cd foo ");
+    assert_eq!(result, vec!["cd", "foo", ""]);
+    let result = ConsoleWindow::digest_line2("cd \"foo bar\"");
+    assert_eq!(result, vec!["cd", "\"foo bar\""]);
+    let result = ConsoleWindow::digest_line2("cd \"foo bar");
+    assert_eq!(result, vec!["cd", "\"foo bar"]);
+    // let result = console.digest_line("cd foo bar\"");
+    // assert_eq!(result, vec!["cd", "foo", "bar\""]);
+    // let result = console.digest_line("\"cd foo bar\"");
+    // assert_eq!(result, vec!["\"cd", "foo", "bar\""]);
+    // let result = console.digest_line("cd\" foo bar\"");
+    // assert_eq!(result, vec!["cd\"", "foo", "bar\""]);
 }

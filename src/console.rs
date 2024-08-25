@@ -42,6 +42,9 @@ pub struct ConsoleWindow {
     // enable running stuff after serde reload
     #[cfg_attr(feature = "persistence", serde(skip))]
     init_done: bool,
+
+    // tab completion
+    fs_tab_enable: bool,
     #[cfg_attr(feature = "persistence", serde(skip))]
     pub(crate) tab_string: String,
     #[cfg_attr(feature = "persistence", serde(skip))]
@@ -51,6 +54,8 @@ pub struct ConsoleWindow {
     pub(crate) tab_quoted: bool,
     #[cfg_attr(feature = "persistence", serde(skip))]
     pub(crate) tab_offset: usize,
+    pub(crate) tab_command_table: Vec<String>,
+    tab_command_column: usize,
 }
 
 impl ConsoleWindow {
@@ -71,11 +76,15 @@ impl ConsoleWindow {
             save_prompt: None,
             search_partial: None,
             init_done: false,
+
             tab_string: String::new(),
             tab_nth: 0,
             tab_quote: '"',
             tab_quoted: false,
             tab_offset: usize::MAX,
+            tab_command_table: Vec::new(),
+            fs_tab_enable: true,
+            tab_command_column: 0,
         }
     }
     /// Draw the console window
@@ -182,6 +191,10 @@ impl ConsoleWindow {
     /// Prompt the user for input
     pub fn prompt(&mut self) {
         self.draw_prompt();
+    }
+    /// get mut ref to tab completion table for commands
+    pub fn command_table_mut(&mut self) -> &mut Vec<String> {
+        &mut self.tab_command_table
     }
 
     fn cursor_at_end(&self) -> CCursorRange {
