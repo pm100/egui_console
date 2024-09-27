@@ -22,7 +22,7 @@ impl ConsoleWindow {
     pub(crate) fn tab_complete(&mut self) {
         let last = self.get_last_line().to_string();
 
-        let args = ConsoleWindow::digest_line2(&last);
+        let args = ConsoleWindow::digest_line(&last);
         if args.is_empty() {
             return;
         }
@@ -86,27 +86,8 @@ impl ConsoleWindow {
         }
     }
     // chop up input line input arguments honoring quotes
-    fn digest_line(&mut self, line: &str) -> Vec<String> {
-        let chunks: Vec<&str> = line.split_ascii_whitespace().collect();
 
-        let mut result: Vec<String> = Vec::new();
-        for (i, chunk) in chunks.iter().enumerate() {
-            if chunk.ends_with(self.tab_quote) && !chunk.starts_with(self.tab_quote) && i > 0 {
-                //
-                if chunks[i - 1].starts_with(self.tab_quote)
-                    && !chunks[i - 1].ends_with(self.tab_quote)
-                {
-                    result[i - 1].push(' ');
-                    result[i - 1].push_str(chunk);
-                    continue;
-                }
-            }
-            result.push(chunk.to_string());
-        }
-        result
-    }
-
-    fn digest_line2(line: &str) -> Vec<&str> {
+    fn digest_line(line: &str) -> Vec<&str> {
         enum State {
             InQuotes(char),
             InWhite,
@@ -125,59 +106,49 @@ impl ConsoleWindow {
                     ' ' => {
                         res.push(&line[start..idx]);
                         state = State::InWhite;
-                        //println!("InWhite: {}", &line[start..idx]);
                     }
                     '"' | '\'' => {
-                        // quote_char = Some(ch);
                         state = State::InQuotes(ch);
                         start = idx;
-                        //  println!("InQuote1: {}", &line[start..idx]);
                     }
                     _ => {}
                 },
                 State::InWhite => match ch {
                     ' ' => {}
                     '"' | '\'' => {
-                        //   quote_char = Some(ch);
                         state = State::InQuotes(ch);
                         start = idx;
-                        // println!("InQuote2: {}", &line[start..idx]);
                     }
                     _ => {
                         start = idx;
                         state = State::InWord;
-                        // println!("InWord1: {}", &line[start..idx]);
                     }
                 },
                 State::InQuotes(qc) => {
                     if ch == qc {
                         res.push(&line[start..idx + 1]);
                         state = State::NotSure;
-
-                        // println!("NotSure: {}", &line[start..idx + 1]);
                         start = idx;
                     }
                 }
                 State::NotSure => {
                     if ch == ' ' {
                         state = State::InWhite;
-                        //  println!("InWhite2: {}", &line[start..idx]);
                     } else {
                         state = State::InWord;
-                        // println!("InWord2: {}", &line[start..idx]);
                     }
                     start = idx;
                 }
             }
         }
+
         match state {
             State::InWord => res.push(&line[start..]),
             State::InWhite => res.push(""),
             State::InQuotes(_) => res.push(&line[start..]),
             State::NotSure => {}
         }
-        // res.push(&line[start..]);
-        println!("digested {:?}", res);
+
         res
     }
 }
@@ -253,8 +224,8 @@ pub(crate) fn fs_tab_complete(search: &str, nth: usize) -> Option<PathBuf> {
             .map(|e| e.unwrap())
             .sorted_by(|a, b| {
                 Ord::cmp(
-                    &a.file_name().to_asciilower(),
-                    &b.file_name().to_ascii_lower(),
+                    &a.file_name().to_ascii_lowercase(),
+                    &b.file_name().to_ascii_lowercase(),
                 )
             });
 
@@ -267,7 +238,20 @@ pub(crate) fn fs_tab_complete(search: &str, nth: usize) -> Option<PathBuf> {
             if added_dot {
                 ret_path = ret_path.strip_prefix(dot_slash).ok()?.to_path_buf();
             }
-
+            #[cfg(target_os = "windows")]
+            if ret_path
+                .display()
+                .to_string()
+                .to_ascii_lowercase()
+                .starts_with(search)
+            {
+                if nth == 0 {
+                    return Some(ret_path);
+                } else {
+                    nth -= 1;
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
             if ret_path.display().to_string().starts_with(search) {
                 if nth == 0 {
                     return Some(ret_path);
@@ -298,13 +282,13 @@ fn test_digest_line() {
 #[test]
 fn test_digest_line2() {
     // let mut console = ConsoleWindow::new(">> ");
-    let result = ConsoleWindow::digest_line2("cd foo");
+    let result = ConsoleWindow::digest_line("cd foo");
     assert_eq!(result, vec!["cd", "foo"]);
-    let result = ConsoleWindow::digest_line2("cd foo ");
+    let result = ConsoleWindow::digest_line("cd foo ");
     assert_eq!(result, vec!["cd", "foo", ""]);
-    let result = ConsoleWindow::digest_line2("cd \"foo bar\"");
+    let result = ConsoleWindow::digest_line("cd \"foo bar\"");
     assert_eq!(result, vec!["cd", "\"foo bar\""]);
-    let result = ConsoleWindow::digest_line2("cd \"foo bar");
+    let result = ConsoleWindow::digest_line("cd \"foo bar");
     assert_eq!(result, vec!["cd", "\"foo bar"]);
     // let result = console.digest_line("cd foo bar\"");
     // assert_eq!(result, vec!["cd", "foo", "bar\""]);
