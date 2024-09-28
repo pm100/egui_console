@@ -36,10 +36,14 @@ pub fn syntax() -> Command {
         )
         .subcommand(
             Command::new("dark")
-                .about("Set register value")
+                .about("Set dark mode")
                 .help_template(APPLET_TEMPLATE),
         )
-        .subcommand(Command::new("light").help_template(APPLET_TEMPLATE))
+        .subcommand(
+            Command::new("light")
+                .about("Set light mode")
+                .help_template(APPLET_TEMPLATE),
+        )
         .subcommand(
             Command::new("clear_screen")
                 .visible_aliases(["cls"])

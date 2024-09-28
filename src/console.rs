@@ -3,6 +3,7 @@ use std::{collections::VecDeque, str::Lines, sync::atomic::AtomicU16};
 use egui::{
     text::CCursorRange, Align, Context, Event, EventFilter, Id, Key, Modifiers, TextEdit, Ui,
 };
+
 static SEARCH_PROMPT: &str = "(reverse-i-search) :";
 const SEARCH_PROMPT_SLOT_OFF: usize = 18;
 static INSTANCE_COUNT: AtomicU16 = AtomicU16::new(0);
@@ -24,9 +25,9 @@ pub enum ConsoleEvent {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConsoleWindow {
     #[cfg_attr(feature = "persistence", serde(skip))]
-    text: String,
+    pub(crate) text: String,
     #[cfg_attr(feature = "persistence", serde(skip))]
-    new_line: bool,
+    pub(crate) force_cursor_to_end: bool,
     history_size: usize,
     pub(crate) scrollback_size: usize,
     command_history: VecDeque<String>,
@@ -41,13 +42,25 @@ pub struct ConsoleWindow {
     // enable running stuff after serde reload
     #[cfg_attr(feature = "persistence", serde(skip))]
     init_done: bool,
+
+    // tab completion
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    pub(crate) tab_string: String,
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    pub(crate) tab_nth: usize,
+    pub(crate) tab_quote: char,
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    pub(crate) tab_quoted: bool,
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    pub(crate) tab_offset: usize,
+    pub(crate) tab_command_table: Vec<String>,
 }
 
 impl ConsoleWindow {
-    fn new(prompt: &str) -> Self {
+    pub(crate) fn new(prompt: &str) -> Self {
         Self {
             text: String::new(),
-            new_line: false,
+            force_cursor_to_end: false,
             command_history: VecDeque::new(),
             history_cursor: None,
             history_size: 100,
@@ -61,6 +74,13 @@ impl ConsoleWindow {
             save_prompt: None,
             search_partial: None,
             init_done: false,
+
+            tab_string: String::new(),
+            tab_nth: 0,
+            tab_quote: '"',
+            tab_quoted: false,
+            tab_offset: usize::MAX,
+            tab_command_table: Vec::new(),
         }
     }
     /// Draw the console window
@@ -75,10 +95,9 @@ impl ConsoleWindow {
         if !self.init_done {
             self.init_done = true;
             if let Some(prompt) = &self.save_prompt {
-                self.prompt = prompt.clone();
+                self.prompt.clone_from(prompt);
                 self.save_prompt = None;
             }
-
             self.draw_prompt();
         }
         // do we need to handle keyboard events?
@@ -104,6 +123,8 @@ impl ConsoleWindow {
                     self.history_cursor = None;
                     self.history_back();
                 }
+                self.tab_string.clear();
+                self.tab_nth = 0;
             }
         }
 
@@ -112,7 +133,7 @@ impl ConsoleWindow {
             escape: true,
             horizontal_arrows: true,
             vertical_arrows: true,
-            tab: false,
+            tab: true, // we need the tab key for tab completion
         };
         if ui.ctx().memory(|mem| mem.has_focus(self.id)) {
             ui.ctx()
@@ -130,7 +151,7 @@ impl ConsoleWindow {
     pub fn write(&mut self, data: &str) {
         self.text.push_str(&format!("\n{}", data));
         self.truncate_scroll_back();
-        self.new_line = true;
+        self.force_cursor_to_end = true;
     }
 
     /// Loads the history from an iterator of strings
@@ -161,11 +182,15 @@ impl ConsoleWindow {
     /// Clear the console
     pub fn clear(&mut self) {
         self.text.clear();
-        self.new_line = false;
+        self.force_cursor_to_end = false;
     }
     /// Prompt the user for input
     pub fn prompt(&mut self) {
         self.draw_prompt();
+    }
+    /// get mut ref to tab completion table for commands
+    pub fn command_table_mut(&mut self) -> &mut Vec<String> {
+        &mut self.tab_command_table
     }
 
     fn cursor_at_end(&self) -> CCursorRange {
@@ -185,7 +210,6 @@ impl ConsoleWindow {
                     .frame(false)
                     .code_editor()
                     .lock_focus(true)
-                    .desired_width(0.0f32)
                     .desired_width(f32::INFINITY)
                     .id(self.id);
                 let output = widget.show(ui);
@@ -224,9 +248,9 @@ impl ConsoleWindow {
                         }
 
                         // we need a new line (user pressed enter)
-                        if self.new_line {
+                        if self.force_cursor_to_end {
                             new_cursor = Some(self.cursor_at_end());
-                            self.new_line = false;
+                            self.force_cursor_to_end = false;
                         }
                     }
                 };
@@ -245,7 +269,7 @@ impl ConsoleWindow {
         });
     }
 
-    fn get_last_line(&self) -> &str {
+    pub(crate) fn get_last_line(&self) -> &str {
         self.text
             .lines()
             .last()
@@ -334,7 +358,7 @@ impl ConsoleWindow {
                 }
                 self.command_history.push_back(last.clone());
 
-                self.new_line = true;
+                self.force_cursor_to_end = true;
                 self.history_cursor = None;
                 self.truncate_scroll_back();
                 (true, Some(last))
@@ -410,6 +434,12 @@ impl ConsoleWindow {
                 }
                 (true, None)
             }
+            (Modifiers::NONE, Key::Tab) => {
+                // off to tab completion land
+                self.tab_complete();
+                (true, None)
+            }
+
             _ => (false, None),
         };
 
@@ -463,7 +493,7 @@ impl ConsoleWindow {
         let last_off = self.last_line_offset();
         self.text.truncate(last_off);
         self.draw_prompt();
-        self.new_line = true;
+        self.force_cursor_to_end = true;
     }
     fn exit_search_mode(&mut self) {
         self.prompt = self.save_prompt.take().unwrap();
@@ -472,7 +502,7 @@ impl ConsoleWindow {
         self.text.truncate(last_off);
         self.draw_prompt();
         self.search_partial = None;
-        self.new_line = true;
+        self.force_cursor_to_end = true;
     }
     fn draw_prompt(&mut self) {
         if !self.text.is_empty() && !self.text.ends_with('\n') {
@@ -540,6 +570,7 @@ pub struct ConsoleBuilder {
     prompt: String,
     history_size: usize,
     scrollback_size: usize,
+    tab_quote_character: char,
 }
 
 impl Default for ConsoleBuilder {
@@ -558,6 +589,7 @@ impl ConsoleBuilder {
             prompt: ">> ".to_string(),
             history_size: 100,
             scrollback_size: 1000,
+            tab_quote_character: '\'',
         }
     }
     /// Set the prompt for the console
@@ -593,6 +625,19 @@ impl ConsoleBuilder {
         self.scrollback_size = size;
         self
     }
+
+    /// Set the character used to quote tab completed
+    /// path containing spaces
+    /// # Arguments
+    /// * `quote` - character to use
+    ///
+    /// # Returns
+    /// * `ConsoleBuilder` - the console builder
+    ///
+    pub fn tab_quote_character(mut self, quote: char) -> Self {
+        self.tab_quote_character = quote;
+        self
+    }
     /// Build the console window
     /// # Returns
     /// * `ConsoleWindow` - the console window
@@ -602,6 +647,7 @@ impl ConsoleBuilder {
         let mut cons = ConsoleWindow::new(&self.prompt);
         cons.history_size = self.history_size;
         cons.scrollback_size = self.scrollback_size;
+        cons.tab_quote = self.tab_quote_character;
         cons
     }
 }
