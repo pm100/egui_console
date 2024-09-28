@@ -84,15 +84,15 @@ impl eframe::App for ConsoleDemo {
                 egui::widgets::global_dark_light_mode_buttons(ui);
             });
         });
-        egui::SidePanel::left("left_panel")
-            .resizable(true)
-            .default_width(150.0)
-            .width_range(80.0..=200.0)
-            .show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.heading("Left Panel");
-                });
-            });
+        // egui::SidePanel::left("left_panel")
+        //     .resizable(true)
+        //     .default_width(150.0)
+        //     .width_range(80.0..=200.0)
+        //     .show(ctx, |ui| {
+        //         ui.vertical_centered(|ui| {
+        //             ui.heading("Left Panel");
+        //         });
+        //     });
         egui::CentralPanel::default().show(ctx, |ui| {
             let mut console_response: ConsoleEvent = ConsoleEvent::None;
             egui::Window::new("Console Window")
@@ -123,7 +123,7 @@ impl eframe::App for ConsoleDemo {
                 self.console_win.prompt();
             }
 
-            if ui.button("click").clicked() {
+            if ui.button("click for console output").clicked() {
                 self.console_win.write("clicked");
                 self.console_win.prompt();
             }
