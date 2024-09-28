@@ -138,16 +138,12 @@ impl ConsoleWindow {
         res
     }
 }
-pub(crate) fn cmd_tab_complete(
-    search: &str,
-    nth: usize,
-    commands: &Vec<String>,
-) -> Option<PathBuf> {
+pub(crate) fn cmd_tab_complete(search: &str, nth: usize, commands: &[String]) -> Option<PathBuf> {
     commands
         .iter()
         .filter(|c| c.starts_with(search))
         .nth(nth)
-        .map(|c| PathBuf::from(c))
+        .map(PathBuf::from)
     //None
 }
 // return the nth matching path, or None if there isnt one
