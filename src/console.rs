@@ -44,7 +44,6 @@ pub struct ConsoleWindow {
     init_done: bool,
 
     // tab completion
-    fs_tab_enable: bool,
     #[cfg_attr(feature = "persistence", serde(skip))]
     pub(crate) tab_string: String,
     #[cfg_attr(feature = "persistence", serde(skip))]
@@ -55,7 +54,6 @@ pub struct ConsoleWindow {
     #[cfg_attr(feature = "persistence", serde(skip))]
     pub(crate) tab_offset: usize,
     pub(crate) tab_command_table: Vec<String>,
-    tab_command_column: usize,
 }
 
 impl ConsoleWindow {
@@ -83,8 +81,6 @@ impl ConsoleWindow {
             tab_quoted: false,
             tab_offset: usize::MAX,
             tab_command_table: Vec::new(),
-            fs_tab_enable: true,
-            tab_command_column: 0,
         }
     }
     /// Draw the console window
@@ -255,7 +251,6 @@ impl ConsoleWindow {
                         if self.force_cursor_to_end {
                             new_cursor = Some(self.cursor_at_end());
                             self.force_cursor_to_end = false;
-                            //  self.tab_quoted = false;
                         }
                     }
                 };

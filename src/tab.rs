@@ -3,21 +3,7 @@ use std::path::PathBuf;
 use itertools::Itertools;
 
 use crate::ConsoleWindow;
-#[derive(Debug)]
-#[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub(crate) struct TabCompleter {
-    #[cfg_attr(feature = "persistence", serde(skip))]
-    tab_string: String,
-    #[cfg_attr(feature = "persistence", serde(skip))]
-    tab_nth: usize,
-    tab_quote: char,
-    #[cfg_attr(feature = "persistence", serde(skip))]
-    tab_quoted: bool,
-    #[cfg_attr(feature = "persistence", serde(skip))]
-    tab_offset: usize,
-    tab_command_table: Vec<String>,
-    tab_command_column: usize,
-}
+
 impl ConsoleWindow {
     pub(crate) fn tab_complete(&mut self) {
         let last = self.get_last_line().to_string();
