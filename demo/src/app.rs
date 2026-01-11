@@ -69,7 +69,7 @@ impl eframe::App for ConsoleDemo {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
 
-            egui::menu::bar(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
                 // NOTE: no File->Quit on web pages!
                 let is_web = cfg!(target_arch = "wasm32") | true;
                 if !is_web {
@@ -81,7 +81,7 @@ impl eframe::App for ConsoleDemo {
                     ui.add_space(16.0);
                 }
 
-                egui::widgets::global_dark_light_mode_buttons(ui);
+                egui::widgets::global_theme_preference_buttons(ui);
             });
         });
         // egui::SidePanel::left("left_panel")

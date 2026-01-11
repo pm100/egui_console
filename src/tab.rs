@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use itertools::Itertools;
-
 use crate::ConsoleWindow;
 
 impl ConsoleWindow {
