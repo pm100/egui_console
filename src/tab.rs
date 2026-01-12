@@ -1,5 +1,8 @@
 use std::path::PathBuf;
 
+#[cfg(target_os = "windows")]
+use itertools::Itertools;
+
 use crate::ConsoleWindow;
 
 impl ConsoleWindow {
