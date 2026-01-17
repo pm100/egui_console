@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "linux"))]
 use itertools::Itertools;
 
 use crate::ConsoleWindow;
