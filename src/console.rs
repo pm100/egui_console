@@ -54,6 +54,14 @@ pub struct ConsoleWindow {
     #[cfg_attr(feature = "persistence", serde(skip))]
     pub(crate) tab_offset: usize,
     pub(crate) tab_command_table: Vec<String>,
+
+    // history popup (F7)
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    show_history_popup: bool,
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    history_popup_selection: usize,
+    /// Key that opens/closes the history popup. `None` disables the popup.
+    pub(crate) history_popup_key: Option<Key>,
 }
 
 impl ConsoleWindow {
@@ -81,6 +89,10 @@ impl ConsoleWindow {
             tab_quoted: false,
             tab_offset: usize::MAX,
             tab_command_table: Vec::new(),
+
+            show_history_popup: false,
+            history_popup_selection: 0,
+            history_popup_key: Some(Key::F7),
         }
     }
     /// Draw the console window
@@ -125,6 +137,52 @@ impl ConsoleWindow {
                 }
                 self.tab_string.clear();
                 self.tab_nth = 0;
+            }
+        }
+
+        // History popup (F7) — rendered as a floating area inside the caller's UI rect
+        if self.show_history_popup && !self.command_history.is_empty() {
+            // Pre-extract data so the closure doesn't need to borrow `self`
+            let history_entries: Vec<String> =
+                self.command_history.iter().rev().cloned().collect();
+            let popup_sel = self.history_popup_selection;
+            let mut clicked_idx: Option<usize> = None;
+
+            // Anchor to the top-left of the console's own UI rect so the popup
+            // stays inside whatever window the caller placed the console in.
+            let popup_pos = ui.max_rect().left_top();
+
+            egui::Area::new(egui::Id::new("history_popup"))
+                .fixed_pos(popup_pos)
+                .order(egui::Order::Foreground)
+                .show(ui.ctx(), |ui| {
+                    egui::Frame::popup(ui.style()).show(ui, |ui| {
+                        ui.set_max_height(ui.ctx().content_rect().height() * 0.6);
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            for (display_idx, entry) in history_entries.iter().enumerate() {
+                                let is_selected = display_idx == popup_sel;
+                                let response =
+                                    ui.selectable_label(is_selected, entry.as_str());
+                                if is_selected {
+                                    response.scroll_to_me(Some(Align::Center));
+                                }
+                                if response.clicked() {
+                                    clicked_idx = Some(display_idx);
+                                }
+                            }
+                        });
+                    });
+                });
+
+            if let Some(display_idx) = clicked_idx {
+                let history_len = self.command_history.len();
+                let idx = history_len - 1 - display_idx;
+                let cmd = self.command_history[idx].clone();
+                let last = self.get_last_line().to_string();
+                self.text = self.text.strip_suffix(&last).unwrap_or("").to_string();
+                self.text.push_str(&cmd);
+                self.show_history_popup = false;
+                self.force_cursor_to_end = true;
             }
         }
 
@@ -316,6 +374,50 @@ impl ConsoleWindow {
     ) -> (bool, Option<String>) {
         // return value is (consume_key, command)
 
+        // When the history popup is visible, intercept navigation keys
+        if self.show_history_popup {
+            return match (modifiers, key) {
+                (Modifiers::NONE, Key::ArrowUp) => {
+                    if self.history_popup_selection > 0 {
+                        self.history_popup_selection -= 1;
+                    }
+                    (true, None)
+                }
+                (Modifiers::NONE, Key::ArrowDown) => {
+                    if self.history_popup_selection + 1 < self.command_history.len() {
+                        self.history_popup_selection += 1;
+                    }
+                    (true, None)
+                }
+                (Modifiers::NONE, Key::Enter) => {
+                    let history_len = self.command_history.len();
+                    if history_len > 0 {
+                        let idx = history_len - 1 - self.history_popup_selection;
+                        let cmd = self.command_history[idx].clone();
+                        let last = self.get_last_line().to_string();
+                        self.text = self.text.strip_suffix(&last).unwrap_or("").to_string();
+                        self.text.push_str(&cmd);
+                        self.force_cursor_to_end = true;
+                    }
+                    self.show_history_popup = false;
+                    (true, None)
+                }
+                (Modifiers::NONE, Key::Escape) => {
+                    self.show_history_popup = false;
+                    (true, None)
+                }
+                _ => {
+                    // also close on the popup key itself
+                    if modifiers == Modifiers::NONE
+                        && self.history_popup_key.map_or(false, |k| k == *key)
+                    {
+                        self.show_history_popup = false;
+                    }
+                    (true, None) // consume all keys while popup is open
+                }
+            };
+        }
+
         let return_value = match (modifiers, key) {
             (Modifiers::NONE, Key::ArrowDown) => {
                 // down arrow only means something if we are in search mode
@@ -440,7 +542,20 @@ impl ConsoleWindow {
                 (true, None)
             }
 
-            _ => (false, None),
+            _ => {
+                // history popup activation key
+                if modifiers == Modifiers::NONE
+                    && self
+                        .history_popup_key
+                        .map_or(false, |k| k == *key)
+                    && !self.command_history.is_empty()
+                {
+                    self.show_history_popup = true;
+                    self.history_popup_selection = 0;
+                    return (true, None);
+                }
+                (false, None)
+            }
         };
 
         return_value
@@ -571,6 +686,7 @@ pub struct ConsoleBuilder {
     history_size: usize,
     scrollback_size: usize,
     tab_quote_character: char,
+    history_popup_key: Option<Key>,
 }
 
 impl Default for ConsoleBuilder {
@@ -590,6 +706,7 @@ impl ConsoleBuilder {
             history_size: 100,
             scrollback_size: 1000,
             tab_quote_character: '\'',
+            history_popup_key: Some(Key::F7),
         }
     }
     /// Set the prompt for the console
@@ -638,6 +755,21 @@ impl ConsoleBuilder {
         self.tab_quote_character = quote;
         self
     }
+
+    /// Set the key used to open the history popup.
+    /// Pass `None` to disable the popup entirely.
+    /// Defaults to `Key::F7`.
+    /// # Arguments
+    /// * `key` - the key to use, or `None` to disable
+    ///
+    /// # Returns
+    /// * `ConsoleBuilder` - the console builder
+    ///
+    pub fn history_popup_key(mut self, key: Option<Key>) -> Self {
+        self.history_popup_key = key;
+        self
+    }
+
     /// Build the console window
     /// # Returns
     /// * `ConsoleWindow` - the console window
@@ -648,6 +780,7 @@ impl ConsoleBuilder {
         cons.history_size = self.history_size;
         cons.scrollback_size = self.scrollback_size;
         cons.tab_quote = self.tab_quote_character;
+        cons.history_popup_key = self.history_popup_key;
         cons
     }
 }

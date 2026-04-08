@@ -49,8 +49,20 @@
 ///
 ///#  Command history
 ///
-/// - ctrl-r searches the command history
-/// - up and down arrow walk though the command history
+/// - Up/Down arrows walk through the command history
+/// - Ctrl-R incremental reverse search
+/// - **F7** opens a popup history selector — navigate with Up/Down, press Enter or click to select, Escape (or F7 again) to dismiss
+///
+/// The popup key defaults to `Key::F7` and can be changed (or disabled) via [`ConsoleBuilder::history_popup_key`]:
+/// ```ignore
+/// ConsoleBuilder::new()
+///     .history_popup_key(Some(egui::Key::F6)) // use F6 instead
+///     .build()
+///
+/// ConsoleBuilder::new()
+///     .history_popup_key(None)               // disable popup entirely
+///     .build()
+/// ```
 ///
 /// If you want the command history to be automatically persisted you need to enable the persistence feature. This will use the eframe storage to save the command history between sessions.
 ///

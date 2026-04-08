@@ -12,7 +12,7 @@ Run it with `cargo run -p demo`. Type 'help' at the command prompt. Shows integr
 
 ![image](https://github.com/user-attachments/assets/de2df396-68ac-4723-ae62-2811fb81ba05)
 
-To see command completeion type 'l<tab>'.
+To see command completion type 'l<tab>'.
 To see filesystem completion try 'cd s<tab>'
 
 ## use
@@ -47,6 +47,24 @@ On each ui update cycle call the draw method, passing in the Ui instance that sh
     }
 ```
 The prompt method repromts the user. The sample above simply echoes the command the user entered and then reprompts.
+
+### command history
+
+- **Up/Down arrows** walk through the command history
+- **Ctrl-R** incremental reverse search
+- **F7** opens a popup history selector — navigate with Up/Down, press Enter or click an entry to select it, Escape (or F7 again) to dismiss
+
+The popup key defaults to `Key::F7` and is configurable via the builder:
+
+```
+ConsoleBuilder::new()
+    .history_popup_key(Some(egui::Key::F6))  // use a different key
+    .build()
+
+ConsoleBuilder::new()
+    .history_popup_key(None)                 // disable the popup entirely
+    .build()
+```
 
 ### command completion
 

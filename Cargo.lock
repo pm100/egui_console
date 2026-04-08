@@ -1013,7 +1013,7 @@ dependencies = [
 
 [[package]]
 name = "egui_console"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "eframe",
  "egui",

@@ -149,7 +149,7 @@ pub(crate) fn cmd_tab_complete(search: &str, nth: usize, commands: &[String]) ->
 }
 // return the nth matching path, or None if there isnt one
 pub(crate) fn fs_tab_complete(search: &str, nth: usize) -> Option<PathBuf> {
-    let dot_slash = if cfg!(target_os = "windows") && search.find('\\').is_some() {
+    let dot_slash = if cfg!(target_os = "windows") {
         ".\\"
     } else {
         "./"
@@ -158,6 +158,10 @@ pub(crate) fn fs_tab_complete(search: &str, nth: usize) -> Option<PathBuf> {
 
     let mut nth = nth;
     let mut added_dot = false;
+
+    // on Windows, honour whichever path separator the user typed
+    #[cfg(target_os = "windows")]
+    let user_forward_slash = search.contains('/');
 
     // were we given a real path to start with?
 
@@ -222,16 +226,22 @@ pub(crate) fn fs_tab_complete(search: &str, nth: usize) -> Option<PathBuf> {
                 ret_path = ret_path.strip_prefix(dot_slash).ok()?.to_path_buf();
             }
             #[cfg(target_os = "windows")]
-            if ret_path
-                .display()
-                .to_string()
-                .to_ascii_lowercase()
-                .starts_with(search)
             {
-                if nth == 0 {
-                    return Some(ret_path);
-                } else {
-                    nth -= 1;
+                let search_norm = search.replace('\\', "/").to_ascii_lowercase();
+                let path_str = ret_path.display().to_string();
+                let path_norm = path_str.replace('\\', "/").to_ascii_lowercase();
+                if path_norm.starts_with(&search_norm) {
+                    if nth == 0 {
+                        // Return path using the separator style the user typed
+                        let final_path = if user_forward_slash {
+                            PathBuf::from(path_str.replace('\\', "/"))
+                        } else {
+                            ret_path
+                        };
+                        return Some(final_path);
+                    } else {
+                        nth -= 1;
+                    }
                 }
             }
             #[cfg(not(target_os = "windows"))]
